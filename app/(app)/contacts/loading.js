@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
-const STATUS_WIDTHS = ["w-14", "w-20", "w-20", "w-28", "w-22", "w-28", "w-22"];
+const STATUS_WIDTHS = ["w-12", "w-24", "w-28", "w-28", "w-20"];
 const EMAIL_WIDTHS = [62, 48, 70, 54, 44, 66, 58, 50, 72, 46];
 
 export default function Loading() {
@@ -35,9 +35,6 @@ export default function Loading() {
 							<TableRow className="hover:bg-transparent">
 								<TableHead className="pl-4">Email</TableHead>
 								<TableHead>Status</TableHead>
-								<TableHead className="hidden md:table-cell">Newsletter</TableHead>
-								<TableHead className="hidden text-right lg:table-cell">Opens</TableHead>
-								<TableHead className="hidden text-right lg:table-cell">Clicks</TableHead>
 								<TableHead className="hidden text-right sm:table-cell">Added</TableHead>
 								<TableHead className="w-12 pr-2" />
 							</TableRow>
@@ -45,7 +42,7 @@ export default function Loading() {
 						<TableBody>
 							{EMAIL_WIDTHS.map((width, index) => (
 								<TableRow key={index} className="hover:bg-transparent">
-									<TableCell className="max-w-0 py-2.5 pl-4 sm:w-2/5">
+									<TableCell className="max-w-0 py-2.5 pl-4 sm:w-3/5">
 										<span className="flex items-center gap-2.5">
 											<Skeleton className="size-[26px] shrink-0 rounded-full" />
 											<Skeleton className="h-3.5" style={{ width: `${width}%` }} />
@@ -53,18 +50,6 @@ export default function Loading() {
 									</TableCell>
 									<TableCell>
 										<Skeleton className="h-6 w-16 rounded-full" />
-									</TableCell>
-									<TableCell className="hidden md:table-cell">
-										<span className="flex items-center gap-2">
-											<Skeleton className="size-[18px] rounded-full" />
-											<Skeleton className="h-3 w-20" />
-										</span>
-									</TableCell>
-									<TableCell className="hidden lg:table-cell">
-										<Skeleton className="ml-auto h-3 w-8" />
-									</TableCell>
-									<TableCell className="hidden lg:table-cell">
-										<Skeleton className="ml-auto h-3 w-6" />
 									</TableCell>
 									<TableCell className="hidden sm:table-cell">
 										<Skeleton className="ml-auto h-3 w-20" />

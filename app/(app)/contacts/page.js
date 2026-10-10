@@ -144,7 +144,14 @@ export default async function ContactsPage({ searchParams }) {
 													gravatarHash={gravatarHash(contact.email)}
 													size={26}
 												/>
-												<span className="truncate">{contact.email}</span>
+												<span className="min-w-0">
+													<span className="block truncate">{contact.email}</span>
+													{describeContact(contact) && (
+														<span className="block truncate text-xs font-normal text-muted-foreground">
+															{describeContact(contact)}
+														</span>
+													)}
+												</span>
 											</span>
 										</TableCell>
 										<TableCell>
@@ -199,6 +206,11 @@ function PageLink({ href, isDisabled, label, children }) {
 			</Link>
 		</Button>
 	);
+}
+
+// "Jane Doe · FR", from what Migma knows about the contact.
+function describeContact({ firstName, lastName, country }) {
+	return [[firstName, lastName].filter(Boolean).join(" "), country?.toUpperCase()].filter(Boolean).join(" · ");
 }
 
 function gravatarHash(email) {

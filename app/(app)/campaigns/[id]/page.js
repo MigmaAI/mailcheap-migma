@@ -7,14 +7,16 @@ import { isSendingEnabled } from "@/lib/config";
 import { getCampaign, listSendTimes } from "@/lib/data/campaigns";
 import { getNewsletter } from "@/lib/data/newsletters";
 import { getListCount, listSendingDomains } from "@/lib/migma";
-import { syncCampaign } from "@/lib/sending";
+import { RECIPIENT_FILTERS, getCampaignReport, syncCampaign } from "@/lib/sending";
 import { serialize } from "@/lib/serialize";
 import { isObjectIdString } from "@/lib/validation";
 
 export const metadata = { title: "Campaign" };
 
-export default async function CampaignPage({ params }) {
-	const { id } = await params;
+const CURSOR_PATTERN = /^[\w\-=+/.:]{1,512}$/;
+
+export default async function CampaignPage({ params, searchParams }) {
+	const [{ id }, query] = await Promise.all([params, searchParams]);
 	if (!isObjectIdString(id)) notFound();
 
 	const { account, accountId, migma } = await requireMigma();
@@ -22,10 +24,30 @@ export default async function CampaignPage({ params }) {
 	if (!stored) notFound();
 	const newsletter = await getNewsletter(accountId, stored.newsletterId);
 	if (!newsletter) notFound();
-	const campaign = await syncCampaign(migma, stored).catch(() => stored);
+	// A scheduled issue may have gone out since; a draft has nothing in Migma yet.
+	const campaign = stored.status === "scheduled" ? await syncCampaign(migma, stored).catch(() => stored) : stored;
 
 	if (!["draft", "scheduled"].includes(campaign.status)) {
-		return <CampaignReport campaign={serialize(campaign)} newsletter={serialize(newsletter)} />;
+		const filter = RECIPIENT_FILTERS.includes(query.recipients) ? query.recipients : null;
+		const cursor = typeof query.cursor === "string" && CURSOR_PATTERN.test(query.cursor) ? query.cursor : null;
+		const report = await getCampaignReport(migma, campaign, { filter, cursor }).catch((error) => ({
+			campaign,
+			statsError: error.message,
+			recipientsError: error.message,
+		}));
+		return (
+			<CampaignReport
+				campaign={serialize(report.campaign)}
+				newsletter={serialize(newsletter)}
+				remote={report.remote ? serialize(report.remote) : null}
+				stats={report.stats ? serialize(report.stats) : null}
+				statsError={report.statsError ?? null}
+				recipients={report.recipients ? serialize(report.recipients) : null}
+				recipientsError={report.recipientsError ?? null}
+				filter={filter}
+				cursor={cursor}
+			/>
+		);
 	}
 
 	const [audienceCount, domains, sendTimes] = await Promise.all([

@@ -8,6 +8,7 @@ import { saveNewsletter } from "@/app/(app)/newsletters/actions";
 import AvatarNewsletter from "@/components/AvatarNewsletter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { MAX_AUTHOR_BIO_LENGTH, MAX_DESCRIPTION_LENGTH } from "@/lib/newsletters";
@@ -25,14 +26,16 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains }) {
 	const [fromEmail, setFromEmail] = useState(newsletter?.fromEmail ?? "");
 	const [imageUrl, setImageUrl] = useState(newsletter?.imageUrl ?? "");
 	const [isArchiveEnabled, setIsArchiveEnabled] = useState(Boolean(newsletter?.archiveEnabled));
+	const [projectId, setProjectId] = useState(newsletter?.migma?.projectId ?? brands?.[0]?.id ?? "");
 
 	useEffect(() => {
 		if (state?.ok) toast.success("Saved");
 		if (state?.error) toast.error(state.error);
 	}, [state]);
 
-	const previewImageUrl = IMAGE_PREVIEW_PATTERN.test(imageUrl) ? imageUrl : "";
-	const brand = brands?.find(({ id }) => id === newsletter?.migma?.projectId);
+	const brand = brands?.find(({ id }) => id === projectId);
+	// A new newsletter without its own image takes its brand's logo (newsletters/actions.js).
+	const previewImageUrl = IMAGE_PREVIEW_PATTERN.test(imageUrl) ? imageUrl : !newsletter ? (brand?.logoUrl ?? "") : "";
 	const senderHint = getSenderHint(fromEmail, sendingDomains);
 
 	return (
@@ -65,7 +68,10 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains }) {
 						}}
 					/>
 				</Field>
-				<Field label="Image" hint="Square logo, 128×128 or larger">
+				<Field
+					label="Image"
+					hint={!newsletter && brand?.logoUrl && !imageUrl ? `Uses ${brand.name}'s logo unless you add one` : "Square logo, 128×128 or larger"}
+				>
 					<span className="flex items-center gap-3">
 						<AvatarNewsletter newsletter={{ name, imageUrl: previewImageUrl }} size={36} />
 						<Input
@@ -88,20 +94,23 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains }) {
 					}
 				>
 					{newsletter ? (
-						<span className="flex h-9 items-center text-sm">{brand?.name ?? "Brand in Migma"}</span>
+						<span className="flex h-9 items-center">{brand ? <BrandOption brand={brand} /> : "Brand in Migma"}</span>
 					) : (
-						<select
-							name="projectId"
-							required
-							defaultValue={brands?.[0]?.id ?? ""}
-							className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-						>
-							{(brands ?? []).map(({ id, name: brandName }) => (
-								<option key={id} value={id}>
-									{brandName}
-								</option>
-							))}
-						</select>
+						<>
+							<input type="hidden" name="projectId" value={projectId} />
+							<Select value={projectId} onValueChange={setProjectId}>
+								<SelectTrigger className="h-10 w-full" aria-label="Brand">
+									<SelectValue placeholder="Pick a brand" />
+								</SelectTrigger>
+								<SelectContent className="max-h-80">
+									{(brands ?? []).map((item) => (
+										<SelectItem key={item.id} value={item.id}>
+											<BrandOption brand={item} />
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</>
 					)}
 				</Field>
 			</Section>
@@ -218,6 +227,24 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains }) {
 				</Button>
 			</div>
 		</form>
+	);
+}
+
+// A Migma brand as people know it: its logo, its name and its website.
+function BrandOption({ brand }) {
+	return (
+		<span className="flex min-w-0 items-center gap-2">
+			{brand.logoUrl ? (
+				// eslint-disable-next-line @next/next/no-img-element -- a 16px logo from Migma
+				<img src={brand.logoUrl} alt="" width={16} height={16} className="size-4 shrink-0 rounded-sm object-contain" />
+			) : (
+				<span className="grid size-4 shrink-0 place-items-center rounded-sm bg-muted text-[10px] font-semibold text-muted-foreground">
+					{brand.name.charAt(0).toUpperCase()}
+				</span>
+			)}
+			<span className="truncate text-sm">{brand.name}</span>
+			{brand.domain && <span className="truncate text-xs text-muted-foreground">{brand.domain}</span>}
+		</span>
 	);
 }
 

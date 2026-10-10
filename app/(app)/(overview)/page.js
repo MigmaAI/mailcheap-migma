@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { ChevronRight, Globe, Newspaper, Settings2, TriangleAlert } from "lucide-react";
 import ButtonNewCampaign from "@/components/ButtonNewCampaign";
+import CardSending from "@/components/CardSending";
 import ListDomainStatus from "@/components/ListDomainStatus";
 import ListStats from "@/components/ListStats";
 import SkeletonCampaigns from "@/components/SkeletonCampaigns";
@@ -14,10 +15,11 @@ import { Button } from "@/components/ui/button";
 import { requireMigma } from "@/lib/auth";
 import { listNewslettersWithCounts } from "@/lib/contacts";
 import { listRecentCampaigns } from "@/lib/data/campaigns";
-import { formatCompact, formatNumber } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 import { call, listSendingDomains } from "@/lib/migma";
 import { toNewsletterMap, toNewsletterOptions } from "@/lib/newsletters";
 import { getEmailStats } from "@/lib/overview-data";
+import { groupDomains } from "@/lib/sending-domains";
 import { PERIOD_DAYS } from "@/lib/overview-series";
 import { syncStaleCampaigns } from "@/lib/sending";
 
@@ -159,63 +161,40 @@ async function SectionDomains({ migma }) {
 			</NoticeStrip>
 		);
 	}
-	// Verified domains come first; the Domains page has the rest.
-	const shown = domains.slice(0, OVERVIEW_DOMAINS);
+	// Only domains that can send; the Domains page has the ones waiting.
+	const groups = groupDomains(domains);
+	const shown = groups.ready.slice(0, OVERVIEW_DOMAINS);
+	const waiting = groups.dns.length + groups.suspended.length;
+	const notes = [
+		groups.ready.length > shown.length && `${formatNumber(groups.ready.length - shown.length)} more ready`,
+		waiting > 0 && `${formatNumber(waiting)} waiting for DNS`,
+		groups.failed.length > 0 && `${formatNumber(groups.failed.length)} didn't verify`,
+	].filter(Boolean);
 	return (
 		<div className="flex flex-col gap-2 animate-fade-in">
-			<ListDomainStatus domains={shown} />
-			{domains.length > shown.length && (
+			{shown.length > 0 ? (
+				<ListDomainStatus domains={shown} />
+			) : (
+				<NoticeStrip icon={Globe}>No domain can send yet.</NoticeStrip>
+			)}
+			{notes.length > 0 && (
 				<Link href="/domains" className="w-fit text-sm text-muted-foreground transition-colors hover:text-foreground">
-					{formatNumber(domains.length - shown.length)} more on Domains
+					{notes.join(" · ")}
 				</Link>
 			)}
 		</div>
 	);
 }
 
-// The account's sending this month and today, against its Migma plan.
+// The account's sending this month and today, against its Migma plan, with the last six months.
 async function StripUsage({ migma }) {
 	let usage;
 	try {
-		usage = await call(migma.metrics.sending());
+		usage = await call(migma.metrics.sending({ months: 6 }));
 	} catch (error) {
 		return <NoticeStrip>Migma unreachable: {error.message}</NoticeStrip>;
 	}
-
-	const items = [
-		{ label: "Sent this month", value: <Quota used={usage.monthly.sent} limit={usage.monthlyLimit} /> },
-		{ label: "Sent today", value: <Quota used={usage.today.sent} limit={usage.today.dailyLimit} /> },
-		{ label: "Delivered this month", value: formatNumber(usage.monthly.delivered) },
-		{ label: "Bounced · complaints", value: `${formatNumber(usage.monthly.bounced)} · ${formatNumber(usage.monthly.complained)}` },
-	];
-
-	return (
-		<div className="overflow-hidden rounded-xl bg-card shadow-border animate-fade-in">
-			<dl className="grid grid-cols-2 gap-px bg-border/60 lg:grid-cols-4">
-				{items.map(({ label, value }) => (
-					<div key={label} className="flex min-h-[66px] flex-col items-start justify-center gap-1.5 bg-card px-4 py-3">
-						<dt className="text-xs text-muted-foreground">{label}</dt>
-						<dd className="w-full text-sm font-medium tabular-nums">{value}</dd>
-					</div>
-				))}
-			</dl>
-		</div>
-	);
-}
-
-function Quota({ used, limit }) {
-	const share = limit ? Math.min(used / limit, 1) : 0;
-	return (
-		<span className="flex w-full flex-col gap-1.5">
-			{formatNumber(used)} / {limit ? formatCompact(limit) : "—"}
-			<span className="h-1 w-full max-w-32 overflow-hidden rounded-full bg-muted">
-				<span
-					className="block h-full rounded-full bg-foreground/70"
-					style={{ width: `${Math.max(share * 100, share > 0 ? 2 : 0)}%` }}
-				/>
-			</span>
-		</span>
-	);
+	return <CardSending usage={usage} />;
 }
 
 function Section({ title, href, stagger, children }) {

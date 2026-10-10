@@ -58,10 +58,10 @@ function validateNewsletter(values) {
 // A new newsletter gets its own list (a tag) on the chosen Migma brand. The brand can't change later:
 // the subscribers are contacts on it.
 async function createInMigma(migma, { projectId, name }) {
-	const brands = await listBrands(migma);
-	if (!brands.some(({ id }) => id === projectId)) throw new Error("Pick a brand from your Migma account");
+	const brand = (await listBrands(migma)).find(({ id }) => id === projectId);
+	if (!brand) throw new Error("Pick a brand from your Migma account");
 	const tag = await ensureListTag(migma, { projectId, name });
-	return { projectId, tagId: String(tag.id) };
+	return { refs: { projectId, tagId: String(tag.id) }, brand };
 }
 
 export async function saveNewsletter(_state, formData) {
@@ -80,8 +80,10 @@ export async function saveNewsletter(_state, formData) {
 			if (!(await updateNewsletter(accountId, id, document))) return { error: "Newsletter not found" };
 		} else {
 			if (await isSlugTaken(document.slug)) return { error: "This slug is already used" };
-			const migmaRefs = await createInMigma(migma, { projectId: readText(formData, "projectId"), name: values.name });
-			createdId = await createNewsletter({ ...document, accountId, migma: migmaRefs });
+			const { refs, brand } = await createInMigma(migma, { projectId: readText(formData, "projectId"), name: values.name });
+			// Without an image of its own, the newsletter shows its brand's logo.
+			const imageUrl = document.imageUrl || (brand.logoUrl?.startsWith("https://") ? brand.logoUrl : "");
+			createdId = await createNewsletter({ ...document, imageUrl, accountId, migma: refs });
 		}
 	} catch (error) {
 		if (/UNIQUE constraint failed/.test(error?.message)) return { error: "This slug is already used" };
