@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { toBrand, toBrandWebsite, toBrands } from "../lib/brands.js";
+import { findBrandForSite, toBrand, toBrandWebsite, toBrands, toSiteHost } from "../lib/brands.js";
 
 test("a website becomes the https address Migma reads", () => {
 	const accepted = [
@@ -18,23 +18,39 @@ test("anything that isn't a public website is refused", () => {
 	}
 });
 
-test("brands mid-import are marked, failed imports are left out, A to Z", () => {
+test("brands are marked importing or failed, A to Z", () => {
 	const brands = toBrands([
 		{ _id: "b", name: "zeta", status: "active", domain: "zeta.com", logoUrls: { primary: "https://cdn/z.png" } },
 		{ _id: "a", name: "Acme", status: "processing", domain: "acme.com" },
 		{ _id: "c", name: "Broken", status: "error" },
 	]);
 	assert.deepEqual(
-		brands.map(({ id, importing }) => [id, importing]),
+		brands.map(({ id, importing, failed }) => [id, importing, failed]),
 		[
-			["a", true],
-			["b", false],
+			["a", true, false],
+			["c", false, true],
+			["b", false, false],
 		]
 	);
-	assert.equal(brands[1].logoUrl, "https://cdn/z.png");
+	assert.equal(brands[2].logoUrl, "https://cdn/z.png");
 });
 
 test("a brand without a name yet shows its domain", () => {
 	assert.equal(toBrand({ _id: 1, status: "pending", domain: "acme.com" }).name, "acme.com");
 	assert.equal(toBrand({ _id: 1, status: "pending" }).name, "Untitled brand");
+});
+
+test("a website finds the account's brand for the same site", () => {
+	assert.equal(toSiteHost("https://www.Acme.com/about"), "acme.com");
+	assert.equal(toSiteHost("nope"), null);
+	const brands = toBrands([
+		{ _id: "ok", name: "Acme", status: "active", domain: "www.acme.com" },
+		{ _id: "bad", name: "Shop", status: "error", domain: "shop.acme.com" },
+		{ _id: "new", name: "Zeta", status: "pending", domain: "https://zeta.io" },
+	]);
+	assert.equal(findBrandForSite(brands, "acme.com")?.id, "ok");
+	assert.equal(findBrandForSite(brands, "zeta.io/blog")?.id, "new");
+	// A brand Migma couldn't read isn't reused; a new import gets another try.
+	assert.equal(findBrandForSite(brands, "shop.acme.com"), null);
+	assert.equal(findBrandForSite(brands, "other.com"), null);
 });

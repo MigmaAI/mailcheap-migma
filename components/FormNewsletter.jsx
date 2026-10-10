@@ -1,12 +1,11 @@
 "use client";
 
-import { useActionState, useCallback, useEffect, useState } from "react";
+import { startTransition, useActionState, useEffect, useState } from "react";
 import Link from "next/link";
-import { ExternalLink, Loader2, Plus } from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { saveNewsletter } from "@/app/(app)/newsletters/actions";
 import AvatarNewsletter from "@/components/AvatarNewsletter";
-import CardCreateBrand from "@/components/CardCreateBrand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -26,17 +25,21 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains }) {
 	const [fromName, setFromName] = useState(newsletter?.fromName ?? "");
 	const [fromEmail, setFromEmail] = useState(newsletter?.fromEmail ?? "");
 	const [imageUrl, setImageUrl] = useState(newsletter?.imageUrl ?? "");
+	// The brand's logo arrives after the page has loaded (checkBrand, then a refresh). An empty field takes
+	// it, so saving doesn't clear it; an image someone typed stays.
+	const [savedImageUrl, setSavedImageUrl] = useState(newsletter?.imageUrl ?? "");
+	if ((newsletter?.imageUrl ?? "") !== savedImageUrl) {
+		setSavedImageUrl(newsletter?.imageUrl ?? "");
+		if (!imageUrl) setImageUrl(newsletter?.imageUrl ?? "");
+	}
 	const [isArchiveEnabled, setIsArchiveEnabled] = useState(Boolean(newsletter?.archiveEnabled));
+	// Brands a new newsletter can go on. One Migma is still reading works too: it finishes in the background.
+	const pickableBrands = (brands ?? []).filter(({ failed }) => !failed);
 	const [projectId, setProjectId] = useState(
-		newsletter?.migma?.projectId ?? brands?.find(({ importing }) => !importing)?.id ?? ""
+		newsletter?.migma?.projectId ?? (pickableBrands.find(({ importing }) => !importing) ?? pickableBrands[0])?.id ?? ""
 	);
-	const importingBrand = !newsletter ? brands?.find(({ importing }) => importing) : null;
-	const [isCreatingBrand, setIsCreatingBrand] = useState(Boolean(importingBrand));
-	// Stable, so the brand card's status checks don't restart as this form re-renders.
-	const handleBrandReady = useCallback((id) => {
-		setProjectId(id);
-		setIsCreatingBrand(false);
-	}, []);
+	// New newsletters start from the account's website; Migma customers can pick a brand they already have.
+	const [brandSource, setBrandSource] = useState(pickableBrands.length > 0 ? "existing" : "website");
 
 	useEffect(() => {
 		if (state?.ok) toast.success("Saved");
@@ -44,12 +47,23 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains }) {
 	}, [state]);
 
 	const brand = brands?.find(({ id }) => id === projectId);
+	const isFromWebsite = !newsletter && brandSource === "website";
 	// A new newsletter without its own image takes its brand's logo (newsletters/actions.js).
-	const previewImageUrl = IMAGE_PREVIEW_PATTERN.test(imageUrl) ? imageUrl : !newsletter ? (brand?.logoUrl ?? "") : "";
+	const previewImageUrl =
+		IMAGE_PREVIEW_PATTERN.test(imageUrl) ? imageUrl : !newsletter && !isFromWebsite ? (brand?.logoUrl ?? "") : "";
 	const senderHint = getSenderHint(fromEmail, sendingDomains);
 
 	return (
-		<form action={action} className="flex flex-col gap-4">
+		<form
+			// Not action={action}: React clears a form's fields after an action, so an error (a slug taken,
+			// a website Migma refused) would wipe what was typed.
+			onSubmit={(event) => {
+				event.preventDefault();
+				const formData = new FormData(event.currentTarget);
+				startTransition(() => action(formData));
+			}}
+			className="flex flex-col gap-4"
+		>
 			{newsletter && <input type="hidden" name="id" value={newsletter._id} />}
 
 			<Section title="General" stagger={0}>
@@ -80,7 +94,13 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains }) {
 				</Field>
 				<Field
 					label="Image"
-					hint={!newsletter && brand?.logoUrl && !imageUrl ? `Uses ${brand.name}'s logo unless you add one` : "Square logo, 128×128 or larger"}
+					hint={
+						isFromWebsite && !imageUrl
+							? "Uses your website's logo unless you add one"
+							: !newsletter && brand?.logoUrl && !imageUrl
+								? `Uses ${brand.name}'s logo unless you add one`
+								: "Square logo, 128×128 or larger"
+					}
 				>
 					<span className="flex items-center gap-3">
 						<AvatarNewsletter newsletter={{ name, imageUrl: previewImageUrl }} size={36} />
@@ -94,57 +114,53 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains }) {
 				</Field>
 			</Section>
 
-			<Section title="Migma" stagger={1}>
-				<Field
-					label="Brand"
-					hint={
-						newsletter
-							? "Subscribers are contacts on this brand in Migma, on their own list."
-							: "Its colors and logo shape emails Migma designs. Subscribers become contacts on this brand."
-					}
-				>
-					{newsletter ? (
+			<Section title="Brand" stagger={1}>
+				{newsletter ? (
+					<Field label="Brand" hint="Subscribers are contacts on this brand in Migma, on their own list.">
 						<span className="flex h-9 items-center">{brand ? <BrandOption brand={brand} /> : "Brand in Migma"}</span>
-					) : (
-						<>
-							<input type="hidden" name="projectId" value={projectId} />
-							{/* Radix reports "" while the value isn't in the list yet (a brand just created, before the
-							page refreshes); nobody can pick "" themselves. */}
-							<Select value={projectId} onValueChange={(value) => value && setProjectId(value)}>
-								<SelectTrigger className="h-10 w-full" aria-label="Brand">
-									<SelectValue placeholder="Pick a brand" />
-								</SelectTrigger>
-								<SelectContent className="max-h-80">
-									{(brands ?? []).map((item) => (
-										<SelectItem key={item.id} value={item.id} disabled={item.importing}>
-											<BrandOption brand={item} />
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</>
-					)}
-				</Field>
-				{!newsletter && (
-					<div className="px-4 py-3 sm:pl-[calc(9rem+2rem)]">
-						{isCreatingBrand ? (
-							<CardCreateBrand
-								importing={importingBrand}
-								onReady={handleBrandReady}
-								onCancel={() => setIsCreatingBrand(false)}
-								isCompact
-							/>
-						) : (
-							<button
-								type="button"
-								onClick={() => setIsCreatingBrand(true)}
-								className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground"
-							>
-								<Plus className="size-3.5" />
-								New brand from a website
-							</button>
-						)}
-					</div>
+					</Field>
+				) : isFromWebsite ? (
+					<Field
+						label="Website"
+						hint={
+							<>
+								Migma reads it for your logo, colors and fonts, and designs your issues with them. It&apos;s saved
+								as a brand in your Migma account.
+								{pickableBrands.length > 0 && (
+									<SwitchBrandSource onClick={() => setBrandSource("existing")}>Use a brand I have in Migma</SwitchBrandSource>
+								)}
+							</>
+						}
+					>
+						<input type="hidden" name="brandSource" value="website" />
+						<Input name="website" required placeholder="yourcompany.com" inputMode="url" autoComplete="url" spellCheck={false} />
+					</Field>
+				) : (
+					<Field
+						label="Brand"
+						hint={
+							<>
+								Its colors and logo shape emails Migma designs. Subscribers become contacts on this brand.
+								<SwitchBrandSource onClick={() => setBrandSource("website")}>Start from a website instead</SwitchBrandSource>
+							</>
+						}
+					>
+						<input type="hidden" name="brandSource" value="existing" />
+						<input type="hidden" name="projectId" value={projectId} />
+						{/* Radix reports "" while the value isn't in the list; nobody can pick "" themselves. */}
+						<Select value={projectId} onValueChange={(value) => value && setProjectId(value)}>
+							<SelectTrigger className="h-10 w-full" aria-label="Brand">
+								<SelectValue placeholder="Pick a brand" />
+							</SelectTrigger>
+							<SelectContent className="max-h-80">
+								{pickableBrands.map((item) => (
+									<SelectItem key={item.id} value={item.id}>
+										<BrandOption brand={item} />
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</Field>
 				)}
 			</Section>
 
@@ -263,6 +279,19 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains }) {
 	);
 }
 
+// Inside a field's hint, which sits in its <label>: a button there doesn't focus the field.
+function SwitchBrandSource({ onClick, children }) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			className="ml-1 text-foreground underline decoration-border underline-offset-2 transition-colors duration-150 hover:decoration-foreground"
+		>
+			{children}
+		</button>
+	);
+}
+
 // A Migma brand as people know it: its logo, its name and its website.
 function BrandOption({ brand }) {
 	return (
@@ -276,8 +305,8 @@ function BrandOption({ brand }) {
 				</span>
 			)}
 			<span className="truncate text-sm">{brand.name}</span>
-			{brand.importing ? (
-				<span className="shrink-0 text-xs text-muted-foreground">Still importing</span>
+			{brand.importing || brand.failed ? (
+				<span className="shrink-0 text-xs text-muted-foreground">{brand.failed ? "Not set up" : "Still importing"}</span>
 			) : (
 				brand.domain && <span className="truncate text-xs text-muted-foreground">{brand.domain}</span>
 			)}

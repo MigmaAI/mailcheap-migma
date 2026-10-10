@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { revalidateArchive } from "@/lib/archive-data";
 import { requireMigma } from "@/lib/auth";
-import { createNewsletter, isSlugTaken, updateNewsletter } from "@/lib/data/newsletters";
-import { toBrandWebsite } from "@/lib/brands";
+import { createNewsletter, getNewsletter, isSlugTaken, updateNewsletter } from "@/lib/data/newsletters";
+import { findBrandForSite, toBrandWebsite } from "@/lib/brands";
 import { MigmaRequestError, ensureListTag, getBrandImport, listBrands, retryBrandImport, startBrandImport } from "@/lib/migma";
 import { MAX_AUTHOR_BIO_LENGTH, MAX_DESCRIPTION_LENGTH } from "@/lib/newsletters";
 import { parseSocialLinks } from "@/lib/social";
@@ -56,14 +56,24 @@ function validateNewsletter(values) {
 	return values.socialLinks.error ?? null;
 }
 
-// A new newsletter gets its own list (a tag) on the chosen Migma brand. The brand can't change later:
-// the subscribers are contacts on it.
-async function createInMigma(migma, { projectId, name }) {
-	const brand = (await listBrands(migma)).find(({ id }) => id === projectId);
-	if (!brand) throw new Error("Pick a brand from your Migma account");
-	if (brand.importing) throw new Error(`Migma is still reading ${brand.domain || brand.name}. Try again in a minute.`);
-	const tag = await ensureListTag(migma, { projectId, name });
-	return { refs: { projectId, tagId: String(tag.id) }, brand };
+// Where a new newsletter's brand comes from: the account's own website (the default), or a brand the
+// account already has in Migma.
+function readBrandChoice(formData) {
+	if (readText(formData, "brandSource") === "existing") return { projectId: readText(formData, "projectId") };
+	const website = toBrandWebsite(formData.get("website"));
+	return website ? { website } : { error: "Enter your website, like acme.com" };
+}
+
+// A new newsletter gets its own list (a tag) on a Migma brand. From a website, it reuses the account's
+// brand for that site or starts importing one; Migma gives the new brand's id right away, so the
+// newsletter exists before the import finishes. The brand can't change later: subscribers are contacts on it.
+async function createInMigma(migma, { projectId, website, name }) {
+	const brands = await listBrands(migma);
+	let brand = website ? findBrandForSite(brands, website) : brands.find(({ id }) => id === projectId);
+	if (website && !brand) brand = { id: await startBrandImport(migma, website), logoUrl: null, importing: true };
+	if (!brand || brand.failed) throw new Error("Pick a brand from your Migma account");
+	const tag = await ensureListTag(migma, { projectId: brand.id, name });
+	return { refs: { projectId: brand.id, tagId: String(tag.id) }, brand };
 }
 
 export async function saveNewsletter(_state, formData) {
@@ -72,7 +82,8 @@ export async function saveNewsletter(_state, formData) {
 	if (id && !isObjectIdString(id)) return { error: "Newsletter not found" };
 
 	const values = readNewsletter(formData);
-	const error = validateNewsletter(values);
+	const brandChoice = id ? {} : readBrandChoice(formData);
+	const error = validateNewsletter(values) ?? brandChoice.error;
 	if (error) return { error };
 	const document = { ...values, socialLinks: values.socialLinks.links };
 
@@ -82,15 +93,16 @@ export async function saveNewsletter(_state, formData) {
 			if (!(await updateNewsletter(accountId, id, document))) return { error: "Newsletter not found" };
 		} else {
 			if (await isSlugTaken(document.slug)) return { error: "This slug is already used" };
-			const { refs, brand } = await createInMigma(migma, { projectId: readText(formData, "projectId"), name: values.name });
-			// Without an image of its own, the newsletter shows its brand's logo.
+			const { refs, brand } = await createInMigma(migma, { ...brandChoice, name: values.name });
+			// Without an image of its own, the newsletter shows its brand's logo (checkBrand adds it once a
+			// brand that's still importing has one).
 			const imageUrl = document.imageUrl || (brand.logoUrl?.startsWith("https://") ? brand.logoUrl : "");
 			createdId = await createNewsletter({ ...document, imageUrl, accountId, migma: refs });
 		}
 	} catch (error) {
 		if (/UNIQUE constraint failed/.test(error?.message)) return { error: "This slug is already used" };
 		console.error("[newsletters] Save failed:", error);
-		return { error: error.message || "Couldn't save the newsletter" };
+		return { error: describeBrandError(error, "Couldn't save the newsletter") };
 	}
 
 	revalidatePath("/newsletters");
@@ -105,27 +117,22 @@ function describeBrandError(error, fallback) {
 	return error?.message || fallback;
 }
 
-// Creates a brand in the account's Migma workspace from its website. The import runs in Migma;
-// checkBrand reports when it's ready.
-export async function createBrand(_state, formData) {
-	const { migma } = await requireMigma();
-	const website = toBrandWebsite(formData.get("website"));
-	if (!website) return { error: "Enter your website, like acme.com" };
+// Where a newsletter's brand import is. When it's done, a newsletter without an image of its own
+// takes the brand's logo, as one created on a ready brand does.
+export async function checkBrand(newsletterId) {
+	if (!isObjectIdString(newsletterId)) return { status: "error", error: "Newsletter not found" };
+	const { accountId, migma } = await requireMigma();
+	const newsletter = await getNewsletter(accountId, newsletterId);
+	if (!newsletter) return { status: "error", error: "Newsletter not found" };
 	try {
-		const host = new URL(website).hostname.replace(/^www\./, "");
-		return { projectId: await startBrandImport(migma, website), website: host };
-	} catch (error) {
-		console.error("[brands] Import failed to start:", error);
-		return { error: describeBrandError(error, "Migma couldn't start reading that website") };
-	}
-}
-
-export async function checkBrand(projectId) {
-	if (!isObjectIdString(projectId)) return { status: "error", error: "Brand not found" };
-	const { migma } = await requireMigma();
-	try {
-		const result = await getBrandImport(migma, projectId);
-		if (result.status === "active") revalidatePath("/newsletters/new");
+		const result = await getBrandImport(migma, newsletter.migma.projectId);
+		if (result.status === "active" && !newsletter.imageUrl) {
+			const brand = (await listBrands(migma)).find(({ id }) => id === newsletter.migma.projectId);
+			if (brand?.logoUrl?.startsWith("https://")) {
+				await updateNewsletter(accountId, newsletterId, { imageUrl: brand.logoUrl });
+				revalidateArchive();
+			}
+		}
 		return result;
 	} catch (error) {
 		// A dropped check isn't a failed import: the next check asks again.
@@ -133,11 +140,13 @@ export async function checkBrand(projectId) {
 	}
 }
 
-export async function retryBrand(projectId) {
-	if (!isObjectIdString(projectId)) return { error: "Brand not found" };
-	const { migma } = await requireMigma();
+export async function retryBrand(newsletterId) {
+	if (!isObjectIdString(newsletterId)) return { error: "Newsletter not found" };
+	const { accountId, migma } = await requireMigma();
+	const newsletter = await getNewsletter(accountId, newsletterId);
+	if (!newsletter) return { error: "Newsletter not found" };
 	try {
-		await retryBrandImport(migma, projectId);
+		await retryBrandImport(migma, newsletter.migma.projectId);
 		return { ok: true };
 	} catch (error) {
 		return { error: describeBrandError(error, "Migma couldn't retry this brand") };
