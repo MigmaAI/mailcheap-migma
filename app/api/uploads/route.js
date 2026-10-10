@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getAccount } from "@/lib/auth";
 import { putImage } from "@/lib/blob";
 import { MAX_UPLOAD_BYTES } from "@/lib/upload-image";
 import { slugify } from "@/lib/slug";
@@ -12,7 +12,7 @@ const IMAGE_TYPES = {
 };
 
 export async function POST(request) {
-	if (!(await getSession())) return Response.json({ error: "Unauthorized" }, { status: 401 });
+	if (!(await getAccount())) return Response.json({ error: "Unauthorized" }, { status: 401 });
 	if (!process.env.BLOB_READ_WRITE_TOKEN) {
 		return Response.json({ error: "Image uploads need a Vercel Blob store (BLOB_READ_WRITE_TOKEN)" }, { status: 503 });
 	}

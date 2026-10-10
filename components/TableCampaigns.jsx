@@ -40,7 +40,7 @@ export default function TableCampaigns({ campaigns, newsletters, hasActions = fa
 					{campaigns.map((campaign) => {
 						const id = campaign._id.toString();
 						const { stats } = campaign;
-						const reached = stats.delivered || stats.sent;
+						const reached = stats.delivered || stats.recipients;
 						const date = campaign.sentAt || campaign.startedAt;
 						const newsletter = newsletters[campaign.newsletterId.toString()];
 						return (

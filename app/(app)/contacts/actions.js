@@ -1,47 +1,46 @@
 "use server";
 
-import { isValidObjectId } from "mongoose";
 import { revalidatePath } from "next/cache";
-import { requireSession } from "@/lib/auth";
-import { withEngagement } from "@/lib/cleanup";
-import { importContactRows } from "@/lib/contact-import";
-import { MAX_IMPORT_ROWS_PER_REQUEST } from "@/lib/csv-import";
-import { connectDb } from "@/lib/db";
-import Contact from "@/models/Contact";
-import Newsletter from "@/models/Newsletter";
+import { requireMigma } from "@/lib/auth";
+import { importRows, unsubscribe } from "@/lib/contacts";
+import { MAX_IMPORT_ROWS_PER_REQUEST, sanitizeImportRow } from "@/lib/csv-import";
+import { getNewsletter } from "@/lib/data/newsletters";
+import { isObjectIdString, normalizeEmail } from "@/lib/validation";
 
-export async function importContacts({ newsletterId, rows }) {
-	await requireSession();
-	if (!isValidObjectId(newsletterId)) return { error: "Newsletter not found" };
-	if (!Array.isArray(rows) || rows.length > MAX_IMPORT_ROWS_PER_REQUEST) return { error: "Too many rows" };
-
-	await connectDb();
-	if (!(await Newsletter.exists({ _id: newsletterId }))) return { error: "Newsletter not found" };
-
-	const result = await importContactRows({ newsletterId, rows });
-	revalidatePath("/contacts");
-	return result;
+async function findNewsletter(newsletterId) {
+	const { accountId, migma } = await requireMigma();
+	if (!isObjectIdString(newsletterId)) return { migma, newsletter: null };
+	return { migma, newsletter: await getNewsletter(accountId, newsletterId) };
 }
 
-export async function setContactStatus(id, status) {
-	await requireSession();
-	if (!isValidObjectId(id) || !["active", "unsubscribed"].includes(status)) {
-		return { error: "Invalid request" };
+// Rows come from the browser, so each is checked again. Migma keeps existing opt-outs.
+export async function importContacts({ newsletterId, rows }) {
+	if (!Array.isArray(rows) || rows.length > MAX_IMPORT_ROWS_PER_REQUEST) return { error: "Too many rows" };
+	const { migma, newsletter } = await findNewsletter(newsletterId);
+	if (!newsletter) return { error: "Newsletter not found" };
+
+	const clean = rows.map(sanitizeImportRow).filter(Boolean);
+	try {
+		const result = await importRows(migma, newsletter, clean);
+		revalidatePath("/contacts");
+		return { ...result, invalid: result.invalid + rows.length - clean.length };
+	} catch (error) {
+		console.error("[contacts] Import failed:", error);
+		return { error: error.message || "Migma didn't take the import" };
 	}
-	await connectDb();
+}
 
-	// Reactivation only applies to dormant contacts; unsubscribes, bounces and complaints are final. It
-	// starts the list cleanup over, or the next send would make them dormant again.
-	const filter =
-		status === "active"
-			? { _id: id, status: "dormant" }
-			: { _id: id, status: { $in: ["active", "dormant", "pending"] } };
-	const update =
-		status === "active"
-			? withEngagement({ $set: { status } })
-			: { $set: { status, unsubscribedAt: new Date() } };
-	const { modifiedCount } = await Contact.updateOne(filter, update);
+export async function unsubscribeContact(newsletterId, email) {
+	const { migma, newsletter } = await findNewsletter(newsletterId);
+	if (!newsletter) return { error: "Newsletter not found" };
+	const address = normalizeEmail(email);
+	if (!address) return { error: "Invalid request" };
 
+	try {
+		await unsubscribe(migma, newsletter, address);
+	} catch (error) {
+		return { error: error.message || "Migma didn't take the change" };
+	}
 	revalidatePath("/contacts");
-	return modifiedCount ? { ok: true } : { error: "Status cannot change" };
+	return { ok: true };
 }

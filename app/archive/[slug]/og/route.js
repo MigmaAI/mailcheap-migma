@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { countReaders, getArchiveIssue, getArchiveNewsletter } from "@/lib/archive-data";
 import { getArchiveUrls } from "@/lib/archive-hosts";
@@ -7,20 +5,26 @@ import { getIssueDate } from "@/lib/archive-issues";
 import { SHARE_IMAGE_SIZE } from "@/lib/archive-seo";
 import { getAppUrl } from "@/lib/config";
 import { formatDate, formatNumber } from "@/lib/format";
+import { readPublicFile } from "@/lib/public-file";
 
-const [geistRegular, geistSemiBold] = await Promise.all([
-	readFile(join(process.cwd(), "assets/fonts/Geist-Regular.ttf")),
-	readFile(join(process.cwd(), "assets/fonts/Geist-SemiBold.ttf")),
-]);
-const FONTS = [
-	{ name: "Geist", data: geistRegular, weight: 400, style: "normal" },
-	{ name: "Geist", data: geistSemiBold, weight: 600, style: "normal" },
-];
+let fonts;
+
+// Loaded once per server instance, on the first card.
+function loadFonts(origin) {
+	fonts ??= Promise.all([
+		readPublicFile("/fonts/Geist-Regular.ttf", origin),
+		readPublicFile("/fonts/Geist-SemiBold.ttf", origin),
+	]).then(([regular, semiBold]) => [
+		{ name: "Geist", data: regular, weight: 400, style: "normal" },
+		{ name: "Geist", data: semiBold, weight: 600, style: "normal" },
+	]);
+	return fonts;
+}
 const COLORS = { foreground: "#0a0a0a", muted: "#737373", border: "#e5e5e5" };
 
-async function loadImage(url) {
+async function loadImage(url, origin) {
 	const buffer = url.startsWith("/")
-		? await readFile(join(process.cwd(), "public", url)).catch(() => null)
+		? await readPublicFile(url, origin).catch(() => null)
 		: await fetch(url, { signal: AbortSignal.timeout(5000) })
 				.then((response) => (response.ok ? response.arrayBuffer() : null))
 				.then((data) => data && Buffer.from(data))
@@ -31,9 +35,9 @@ async function loadImage(url) {
 }
 
 // The card renderer can't decode WebP, so a WebP logo uses the PNG saved next to it.
-async function readLogo(imageUrl) {
+async function readLogo(imageUrl, origin) {
 	if (!imageUrl) return null;
-	return (await loadImage(imageUrl.replace(/\.webp$/i, ".png"))) ?? loadImage(imageUrl);
+	return (await loadImage(imageUrl.replace(/\.webp$/i, ".png"), origin)) ?? loadImage(imageUrl, origin);
 }
 
 // Each issue gets its own soft tint, so archive cards stand out from the page and a row of them
@@ -54,7 +58,8 @@ export async function GET(request, { params }) {
 	const issue = postSlug ? await getArchiveIssue(newsletter._id.toString(), postSlug) : null;
 	if (postSlug && !issue) return new Response("Not found", { status: 404 });
 
-	const [logo, readers] = await Promise.all([readLogo(newsletter.imageUrl), countReaders(newsletter._id.toString())]);
+	const { origin } = new URL(request.url);
+	const [logo, readers, cardFonts] = await Promise.all([readLogo(newsletter.imageUrl, origin), countReaders(newsletter), loadFonts(origin)]);
 	const domain = new URL(getArchiveUrls(newsletter, undefined, getAppUrl()).siteIndex).host;
 	const footer = issue ? formatDate(getIssueDate(issue)) : readers >= 100 ? `Join ${formatNumber(readers)} readers` : "";
 
@@ -112,7 +117,7 @@ export async function GET(request, { params }) {
 		</div>,
 		{
 			...SHARE_IMAGE_SIZE,
-			fonts: FONTS,
+			fonts: cardFonts,
 			headers: { "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800" },
 		}
 	);

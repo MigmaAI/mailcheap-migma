@@ -1,3 +1,6 @@
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants.js";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+
 // No script-src: Next.js's inline scripts would need per-request nonces, which archive pages can't have
 // while they're cached (ISR). script-src-attr still blocks inline event handlers everywhere.
 const CONTENT_SECURITY_POLICY = [
@@ -27,4 +30,8 @@ const nextConfig = {
 	},
 };
 
-export default nextConfig;
+// `next dev` gets the Cloudflare bindings (the local D1 database in .wrangler/) from wrangler.jsonc.
+export default function config(phase) {
+	if (phase === PHASE_DEVELOPMENT_SERVER) initOpenNextCloudflareForDev();
+	return nextConfig;
+}

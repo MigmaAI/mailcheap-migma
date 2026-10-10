@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect } from "react";
-import { Check, Loader2, MailOpen } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { subscribe } from "@/app/archive/actions";
 import { Button } from "@/components/ui/button";
 import { storeValue, subscribedKey } from "@/lib/storage";
@@ -11,10 +11,8 @@ export default function FormSubscribe({ newsletterSlug, className }) {
 	const [state, action, isPending] = useActionState(subscribe, null);
 
 	useEffect(() => {
-		if (state?.ok && !state.pending) storeValue(subscribedKey(newsletterSlug), 1);
+		if (state?.ok) storeValue(subscribedKey(newsletterSlug), 1);
 	}, [state, newsletterSlug]);
-
-	if (state?.pending) return <CardConfirmEmail email={state.email} inbox={state.inbox} className={className} />;
 
 	if (state?.ok) {
 		return (
@@ -56,43 +54,5 @@ export default function FormSubscribe({ newsletterSlug, className }) {
 				</p>
 			)}
 		</form>
-	);
-}
-
-// Until they click the link, they get nothing: say so plainly and put their inbox one tap away.
-function CardConfirmEmail({ email, inbox, className }) {
-	return (
-		<div
-			role="status"
-			className={cn(
-				"w-full rounded-2xl bg-amber-50 p-5 text-left ring-1 ring-amber-500/30 animate-enter dark:bg-amber-500/10",
-				className
-			)}
-		>
-			<div className="flex items-start gap-3.5">
-				<span className="relative grid size-10 shrink-0 place-items-center rounded-full bg-amber-500 text-white">
-					<MailOpen className="size-5 animate-icon-in" aria-hidden="true" />
-					<span className="absolute -top-0.5 -right-0.5 size-3 animate-pulse rounded-full bg-red-500 ring-2 ring-amber-50 dark:ring-transparent" />
-				</span>
-				<div className="min-w-0">
-					<p className="font-semibold text-amber-950 dark:text-amber-50">You&apos;re not subscribed yet</p>
-					<p className="mt-1 text-sm leading-relaxed text-pretty text-amber-950/75 dark:text-amber-50/75">
-						Click the link we just sent to{" "}
-						<strong className="font-semibold break-words text-amber-950 dark:text-amber-50">{email}</strong>.
-						Until you do, you won&apos;t get a single issue.
-					</p>
-				</div>
-			</div>
-			{inbox && (
-				<Button asChild size="lg" className="mt-4 w-full">
-					<a href={inbox.url} target="_blank" rel="noopener noreferrer">
-						Open {inbox.name}
-					</a>
-				</Button>
-			)}
-			<p className="mt-3 text-xs text-amber-950/60 dark:text-amber-50/60">
-				Not in your inbox? Check Promotions or Spam.
-			</p>
-		</div>
 	);
 }

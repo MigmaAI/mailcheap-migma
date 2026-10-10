@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useDeferredValue, useEffect, useEffectEvent, useMemo, useState, useTransition } from "react";
-import { Check, CircleAlert, Copy, FlaskConical, Loader2, MoreHorizontal, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Check, CircleAlert, Copy, Loader2, MoreHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { duplicateCampaign, saveCampaign, sendTestCampaign } from "@/app/(app)/campaigns/actions";
+import { checkCampaignDesign, duplicateCampaign, saveCampaign } from "@/app/(app)/campaigns/actions";
 import AvatarNewsletter from "@/components/AvatarNewsletter";
 import BadgeStatus from "@/components/BadgeStatus";
 import DialogDiscardCampaign from "@/components/DialogDiscardCampaign";
 import DialogScheduleCampaign from "@/components/DialogScheduleCampaign";
 import DialogSendCampaign from "@/components/DialogSendCampaign";
+import DialogTestCampaign from "@/components/DialogTestCampaign";
 import EditorRich from "@/components/EditorRich";
 import HeaderPage from "@/components/HeaderPage";
 import InputCampaignSlug from "@/components/InputCampaignSlug";
@@ -21,8 +23,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatSendTime } from "@/lib/format";
 import { markdownToHtml } from "@/lib/markdown";
 import { getPresendChecks } from "@/lib/presend-checks";
 import { UNSUBSCRIBE_PLACEHOLDER, renderEmail, withResponsiveImages } from "@/lib/render-email";
@@ -30,6 +31,7 @@ import { slugify } from "@/lib/slug";
 import { useAutosave } from "@/lib/use-autosave";
 
 const UPLOADING_MESSAGE = "Wait for images to finish uploading";
+const DESIGN_POLL_MS = 4000;
 
 export default function FormCampaign({
 	campaign,
@@ -42,6 +44,8 @@ export default function FormCampaign({
 	archiveUrlBase,
 }) {
 	const isHtml = campaign.format === "html";
+	// A scheduled issue is already in Migma, so it can't change until it's unscheduled.
+	const isLocked = campaign.status === "scheduled";
 	const [isDiscardOpen, setIsDiscardOpen] = useState(false);
 	const format = isHtml ? "html" : "rich";
 	const [initialBody] = useState(() =>
@@ -54,7 +58,6 @@ export default function FormCampaign({
 	});
 	const save = useCallback((snapshot) => saveCampaign(campaign._id, snapshot), [campaign._id]);
 	const { isDirty, isSaving, error, flush } = useAutosave(values, save);
-	const [isTesting, startTesting] = useTransition();
 	const [isWorking, startWorking] = useTransition();
 	const deferredValues = useDeferredValue(values);
 	const isUploading = values.body.includes('src="blob:');
@@ -70,14 +73,17 @@ export default function FormCampaign({
 			}),
 		[format, deferredValues, newsletter]
 	);
+	// An issue Migma designed is shown as Migma made it, footer included, until it's edited.
+	const isMigmaDesign = isHtml && Boolean(campaign.migma?.html) && deferredValues.body === campaign.migma.html;
 	const previewHtml = useMemo(
-		() => withResponsiveImages(rendered.html.replaceAll(UNSUBSCRIBE_PLACEHOLDER, "#")),
-		[rendered.html]
+		() =>
+			withResponsiveImages((isMigmaDesign ? deferredValues.body : rendered.html).replaceAll(UNSUBSCRIBE_PLACEHOLDER, "#")),
+		[isMigmaDesign, deferredValues.body, rendered.html]
 	);
 	const { checks, blocking } = getPresendChecks({
 		campaign: { ...campaign, ...values },
 		newsletter,
-		rendered,
+		rendered: isMigmaDesign ? { ...rendered, html: deferredValues.body } : rendered,
 		isDomainVerified,
 		isSendingEnabled,
 	});
@@ -88,14 +94,12 @@ export default function FormCampaign({
 		return false;
 	}
 
-	function sendTest() {
-		startTesting(async () => {
-			if (isUploading) return void toast.error(UPLOADING_MESSAGE);
-			if (!(await persist())) return;
-			const result = await sendTestCampaign(campaign._id);
-			if (result?.error) toast.error(result.error);
-			else toast.success(`Test sent to ${testEmail}`);
-		});
+	async function beforeTest() {
+		if (isUploading) {
+			toast.error(UPLOADING_MESSAGE);
+			return false;
+		}
+		return persist();
 	}
 
 	function runAction(action) {
@@ -150,38 +154,26 @@ export default function FormCampaign({
 				icon={<AvatarNewsletter newsletter={newsletter} size={28} />}
 				meta={<BadgeStatus status={campaign.status} />}
 			>
-				<StatusSave isSaving={isDirty || isSaving} error={error} onRetry={flush} />
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<span tabIndex={isSendingEnabled ? -1 : 0} className="rounded-lg">
-							<Button variant="outline" onClick={sendTest} disabled={!isSendingEnabled || isTesting}>
-								{isTesting ? (
-									<Loader2 data-icon="inline-start" className="animate-spin" />
-								) : (
-									<FlaskConical data-icon="inline-start" />
-								)}
-								Test
-							</Button>
-						</span>
-					</TooltipTrigger>
-					<TooltipContent>{isSendingEnabled ? `Sends to ${testEmail}` : "Sending is off"}</TooltipContent>
-				</Tooltip>
+				{!isLocked && <StatusSave isSaving={isDirty || isSaving} error={error} onRetry={flush} />}
+				<DialogTestCampaign
+					campaignId={campaign._id}
+					testEmail={testEmail}
+					disabledReason={isSendingEnabled ? blocking.find(({ id }) => ["subject", "content"].includes(id))?.message : "Sending is off"}
+					onBeforeTest={beforeTest}
+				/>
 				<DialogScheduleCampaign
 					campaignId={campaign._id}
-					scheduledAt={campaign.status === "scheduled" ? campaign.scheduledAt : null}
-					audienceLimit={campaign.audienceLimit}
+					scheduledAt={isLocked ? campaign.scheduledAt : null}
 					audienceCount={audienceCount}
 					history={sendTimes.history}
 					taken={sendTimes.taken}
-					isCleanupEnabled={Boolean(newsletter.cleanup?.enabled)}
 					blockingMessage={isUploading ? UPLOADING_MESSAGE : blocking[0]?.message}
 					onBeforeSchedule={persist}
 				/>
 				<DialogSendCampaign
 					campaignId={campaign._id}
 					audienceCount={audienceCount}
-					scheduledAt={campaign.status === "scheduled" ? campaign.scheduledAt : null}
-					isCleanupEnabled={Boolean(newsletter.cleanup?.enabled)}
+					scheduledAt={isLocked ? campaign.scheduledAt : null}
 					blockingMessage={isUploading ? UPLOADING_MESSAGE : blocking[0]?.message}
 					onBeforeSend={persist}
 				/>
@@ -212,6 +204,22 @@ export default function FormCampaign({
 				/>
 			</HeaderPage>
 
+			{campaign.migma?.error && (
+				<p role="alert" className="mb-4 flex items-start gap-2 rounded-xl px-4 py-3 text-sm shadow-border animate-enter">
+					<CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+					<span>
+						<span className="font-medium">Migma didn&apos;t take the last send.</span>{" "}
+						<span className="text-muted-foreground">{campaign.migma.error}</span>
+					</span>
+				</p>
+			)}
+			{isLocked && (
+				<p className="mb-4 rounded-xl px-4 py-3 text-sm text-muted-foreground shadow-border animate-enter">
+					Scheduled for <span className="font-medium text-foreground">{formatSendTime(campaign.scheduledAt)}</span> in
+					Migma. Unschedule it from the Schedule button to make changes.
+				</p>
+			)}
+
 			<div className="grid gap-4 lg:grid-cols-2 lg:items-start">
 				<div className="overflow-hidden rounded-xl bg-card shadow-border animate-enter">
 					<Row label="From">
@@ -233,6 +241,7 @@ export default function FormCampaign({
 						<input
 							value={values.subject}
 							onChange={update("subject")}
+							readOnly={isLocked}
 							placeholder="Subject"
 							maxLength={200}
 							className="h-11 w-full min-w-0 bg-transparent text-sm font-medium outline-none placeholder:font-normal placeholder:text-muted-foreground"
@@ -242,6 +251,7 @@ export default function FormCampaign({
 						<input
 							value={values.previewText}
 							onChange={update("previewText")}
+							readOnly={isLocked}
 							placeholder="Text shown after the subject"
 							maxLength={300}
 							className="h-11 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
@@ -257,18 +267,25 @@ export default function FormCampaign({
 							/>
 						</Row>
 					)}
-					{isHtml ? (
+					{campaign.migma?.designing ? (
+						<StateDesigning campaignId={campaign._id} />
+					) : isHtml ? (
 						<div className="relative">
-							<span className="pointer-events-none absolute top-3 right-4 text-xs text-muted-foreground">HTML</span>
+							<span className="pointer-events-none absolute top-3 right-4 text-xs text-muted-foreground">
+								{isMigmaDesign ? "Designed by Migma · HTML" : "HTML"}
+							</span>
 							<textarea
 								value={values.body}
 								onChange={update("body")}
+								readOnly={isLocked}
 								placeholder="<html>"
 								spellCheck={false}
 								aria-label="Content"
-								className="block min-h-[560px] w-full resize-none bg-transparent px-4 py-4 font-mono text-[13px] leading-6 outline-none [field-sizing:content] placeholder:text-muted-foreground"
+								className="block min-h-[560px] w-full resize-none bg-transparent px-4 pt-9 pb-4 font-mono text-[13px] leading-6 outline-none [field-sizing:content] placeholder:text-muted-foreground"
 							/>
 						</div>
+					) : isLocked ? (
+						<div className="px-4 py-6 text-sm text-muted-foreground">The issue is in the preview.</div>
 					) : (
 						<EditorRich content={initialBody} onChange={updateBody} />
 					)}
@@ -294,6 +311,41 @@ export default function FormCampaign({
 				</div>
 			</div>
 		</>
+	);
+}
+
+// Migma takes about a minute to write and design an issue; the draft fills in when it's done.
+function StateDesigning({ campaignId }) {
+	const router = useRouter();
+
+	useEffect(() => {
+		let isActive = true;
+		let timer;
+		async function poll() {
+			const result = await checkCampaignDesign(campaignId);
+			if (!isActive) return;
+			if (result?.error || result?.status === "failed") {
+				toast.error(result.error || "Migma couldn't design this issue");
+				return router.refresh();
+			}
+			if (result?.status === "completed") return router.refresh();
+			timer = setTimeout(poll, DESIGN_POLL_MS);
+		}
+		timer = setTimeout(poll, DESIGN_POLL_MS);
+		return () => {
+			isActive = false;
+			clearTimeout(timer);
+		};
+	}, [campaignId, router]);
+
+	return (
+		<div aria-live="polite" className="flex min-h-[560px] flex-col items-center justify-center gap-3 px-6 text-center">
+			<Sparkles className="size-5 animate-pulse text-muted-foreground" />
+			<p className="font-medium">Migma is designing this issue</p>
+			<p className="max-w-xs text-sm text-muted-foreground">
+				On your brand, from your brief. It takes about a minute; you can leave this page and come back.
+			</p>
+		</div>
 	);
 }
 

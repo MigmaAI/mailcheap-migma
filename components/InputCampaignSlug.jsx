@@ -50,8 +50,13 @@ export default function InputCampaignSlug({ campaignId, initialSlug = "", placeh
 		<div className="flex min-w-0 flex-col gap-1.5 py-2.5">
 			<div className="flex min-h-6 min-w-0 items-center gap-2">
 				<label className="flex min-w-0 flex-1 items-center text-sm">
-					<span className="hidden shrink-0 text-muted-foreground sm:inline">{host}</span>
-					<span className="shrink-0 text-muted-foreground">{pathname}</span>
+					{/* In a narrow column the prefix gives way to the slug, from the left. */}
+					<span className="flex min-w-0 shrink overflow-hidden whitespace-nowrap text-muted-foreground [direction:rtl]">
+						<span className="[direction:ltr]">
+							<span className="hidden sm:inline">{host}</span>
+							{pathname}
+						</span>
+					</span>
 					<input
 						value={value}
 						onChange={(event) => {

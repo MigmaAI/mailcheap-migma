@@ -9,11 +9,8 @@ import { getArchiveUrls } from "@/lib/archive-hosts";
 import { getAuthorSeo } from "@/lib/archive-seo";
 import { formatNumber } from "@/lib/format";
 
-export const revalidate = 3600;
-
-export function generateStaticParams() {
-	return [];
-}
+// Rendered on each visit from D1: no page cache to keep fresh on Cloudflare.
+export const dynamic = "force-dynamic";
 
 async function getAuthorPage(params) {
 	const { slug, author: authorSlug } = await params;

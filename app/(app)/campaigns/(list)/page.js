@@ -4,22 +4,20 @@ import HeaderPage from "@/components/HeaderPage";
 import StateEmpty from "@/components/StateEmpty";
 import TableCampaigns from "@/components/TableCampaigns";
 import { getIssuePageUrl } from "@/lib/archive-data";
-import { recentCampaignsPipeline } from "@/lib/campaign-queries";
-import { connectDb } from "@/lib/db";
-import { NEWSLETTER_SUMMARY_FIELDS, toNewsletterMap, toNewsletterOptions } from "@/lib/newsletters";
-import Campaign from "@/models/Campaign";
-import Newsletter from "@/models/Newsletter";
+import { requireMigma } from "@/lib/auth";
+import { listRecentCampaigns } from "@/lib/data/campaigns";
+import { listNewsletters } from "@/lib/data/newsletters";
+import { toNewsletterMap, toNewsletterOptions } from "@/lib/newsletters";
+import { syncStaleCampaigns } from "@/lib/sending";
 
 export const metadata = { title: "Campaigns" };
 
 export default async function CampaignsPage() {
-	await connectDb();
+	const { accountId, migma } = await requireMigma();
+	await syncStaleCampaigns(migma, accountId);
 	const [campaigns, newsletters] = await Promise.all([
-		Campaign.aggregate(recentCampaignsPipeline(200)),
-		Newsletter.find()
-			.sort({ createdAt: 1 })
-			.select(`${NEWSLETTER_SUMMARY_FIELDS} archiveEnabled`)
-			.lean(),
+		listRecentCampaigns({ accountId, limit: 200 }),
+		listNewsletters(accountId),
 	]);
 	const newslettersById = new Map(newsletters.map((newsletter) => [newsletter._id.toString(), newsletter]));
 	const pageUrls = Object.fromEntries(

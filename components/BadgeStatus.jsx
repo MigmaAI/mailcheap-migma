@@ -31,6 +31,10 @@ const DOT_TONES = {
 
 const STATUS_TONES = {
 	active: "green",
+	subscribed: "green",
+	review: "amber",
+	warning: "amber",
+	critical: "red",
 	sent: "green",
 	delivered: "green",
 	success: "green",
