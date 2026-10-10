@@ -52,7 +52,7 @@ Then:
 
 Runs on Cloudflare Workers (through [OpenNext](https://opennext.js.org/cloudflare)) with a D1 database for drafts, newsletter settings and the archive. Contacts and sending stay in Migma.
 
-1. **Workers & Pages → Create → Import a repository**, and pick this repo. Leave the build command empty and set the **deploy command** to `npm run deploy`. It builds the app, deploys it, creates the `mailcheap` D1 database on the first deploy and applies `migrations/`.
+1. **Workers & Pages → Create → Import a repository**, and pick this repo. Leave the build command empty and set the **deploy command** to `npm run deploy`. It builds the app, deploys it, creates the `mailcheap` D1 database on the first deploy and applies `migrations/`. Cloudflare names the Worker after the repo; if yours has another name, set `name` and the `WORKER_SELF_REFERENCE` service in `wrangler.jsonc` to it.
 2. **Settings → Variables and Secrets**: add `SESSION_SECRET` as a secret (`openssl rand -base64 48`), and `APP_URL` (your Worker's URL, or your custom domain) and `SENDING_ENABLED=true` as variables. Redeploy.
 3. **Settings → Domains & Routes → Add → Custom domain** for a domain on Cloudflare, like `newsletter.example.com`. Update `APP_URL` to match.
 
