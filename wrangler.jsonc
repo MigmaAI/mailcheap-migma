@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "mailcheap",
+	"name": "mailcheap-migma",
 	"main": ".open-next/worker.js",
 	"compatibility_date": "2026-10-01",
 	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
@@ -13,7 +13,7 @@
 	},
 	"services": [
 		// Self-reference the OpenNext adapter uses; the service name must match the worker name.
-		{ "binding": "WORKER_SELF_REFERENCE", "service": "mailcheap" }
+		{ "binding": "WORKER_SELF_REFERENCE", "service": "mailcheap-migma" }
 	],
 	"d1_databases": [
 		{
