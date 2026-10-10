@@ -2,7 +2,7 @@ import LogoMigma from "@/components/LogoMigma";
 import { MIGMA_APP_URL } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
-const MARC_URL = "https://x.com/marclou";
+const MARC_URL = "https://x.com/marc_louvion";
 const MAILCHEAP_URL = "https://github.com/marclou/mailcheap";
 const MARC_AVATAR = "https://github.com/marclou.png?size=64";
 
