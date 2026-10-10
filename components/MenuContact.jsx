@@ -1,9 +1,9 @@
 "use client";
 
 import { useTransition } from "react";
-import { MoreHorizontal, UserCheck, UserX } from "lucide-react";
+import { MoreHorizontal, UserX } from "lucide-react";
 import { toast } from "sonner";
-import { setContactStatus } from "@/app/(app)/contacts/actions";
+import { unsubscribeContact } from "@/app/(app)/contacts/actions";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -12,13 +12,13 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export default function MenuContact({ id, status }) {
+export default function MenuContact({ newsletterId, email, status }) {
 	const [isPending, startTransition] = useTransition();
-	if (!["active", "dormant"].includes(status)) return null;
+	if (status !== "subscribed") return null;
 
-	function update(nextStatus) {
+	function unsubscribe() {
 		startTransition(async () => {
-			const result = await setContactStatus(id, nextStatus);
+			const result = await unsubscribeContact(newsletterId, email);
 			if (result?.error) toast.error(result.error);
 		});
 	}
@@ -31,13 +31,7 @@ export default function MenuContact({ id, status }) {
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
-				{status === "dormant" && (
-					<DropdownMenuItem onSelect={() => update("active")}>
-						<UserCheck />
-						Reactivate
-					</DropdownMenuItem>
-				)}
-				<DropdownMenuItem variant="destructive" onSelect={() => update("unsubscribed")}>
+				<DropdownMenuItem variant="destructive" onSelect={unsubscribe}>
 					<UserX />
 					Unsubscribe
 				</DropdownMenuItem>

@@ -1,18 +1,19 @@
 import Link from "next/link";
-import { Archive, ChevronRight, Hand, MailCheck, Newspaper, Plus } from "lucide-react";
+import { Archive, ChevronRight, Newspaper, Plus } from "lucide-react";
 import AvatarNewsletter from "@/components/AvatarNewsletter";
 import HeaderPage from "@/components/HeaderPage";
 import StateEmpty from "@/components/StateEmpty";
 import { Button } from "@/components/ui/button";
-import { listNewslettersWithActiveCounts } from "@/lib/contacts";
-import { connectDb } from "@/lib/db";
+import TextEmpty from "@/components/TextEmpty";
+import { requireMigma } from "@/lib/auth";
+import { listNewslettersWithCounts } from "@/lib/contacts";
 import { formatNumber } from "@/lib/format";
 
 export const metadata = { title: "Newsletters" };
 
 export default async function NewslettersPage() {
-	await connectDb();
-	const newsletters = await listNewslettersWithActiveCounts();
+	const { accountId, migma } = await requireMigma();
+	const newsletters = await listNewslettersWithCounts(migma, accountId);
 
 	return (
 		<>
@@ -53,16 +54,11 @@ export default async function NewslettersPage() {
 							<div className="flex items-end justify-between gap-3">
 								<div>
 									<p className="text-2xl font-semibold tracking-tight tabular-nums">
-										{formatNumber(newsletter.activeCount)}
+										{newsletter.activeCount === null ? <TextEmpty /> : formatNumber(newsletter.activeCount)}
 									</p>
-									<p className="text-xs text-muted-foreground">active contacts</p>
+									<p className="text-xs text-muted-foreground">subscribers</p>
 								</div>
 								<div className="flex gap-1.5">
-									{newsletter.requireConfirmation ? (
-										<Chip icon={MailCheck}>Confirmation</Chip>
-									) : (
-										newsletter.welcome?.enabled && <Chip icon={Hand}>Welcome</Chip>
-									)}
 									{newsletter.archiveEnabled && <Chip icon={Archive}>Archive</Chip>}
 								</div>
 							</div>

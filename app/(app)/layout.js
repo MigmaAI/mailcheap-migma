@@ -1,26 +1,38 @@
 import Link from "next/link";
+import CreditsMailcheap from "@/components/CreditsMailcheap";
 import LogoMailcheap from "@/components/LogoMailcheap";
+import LogoMigma from "@/components/LogoMigma";
 import NavFooter from "@/components/NavFooter";
 import NavLinks from "@/components/NavLinks";
 import NavMobile from "@/components/NavMobile";
-import { requireSession } from "@/lib/auth";
+import { requireAccount } from "@/lib/auth";
+import { APP_NAME } from "@/lib/config";
 
 export default async function AppLayout({ children }) {
-	await requireSession();
+	const account = await requireAccount();
+	const footer = (
+		<>
+			<CreditsMailcheap className="px-2.5 pt-4" />
+			<NavFooter accountName={account.name} keyHint={account.keyHint} />
+		</>
+	);
 
 	return (
 		<div className="flex min-h-dvh flex-col md:flex-row">
 			<aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-border/60 px-3 py-4 md:flex">
-				<Link href="/" className="mb-6 flex h-9 items-center gap-2 px-2.5">
+				<Link href="/" className="mb-6 flex items-center gap-2 px-2.5 py-0.5">
 					<LogoMailcheap />
-					<span className="text-sm font-semibold tracking-tight">Mailcheap</span>
+					<span className="flex flex-col leading-tight">
+						<span className="text-sm font-semibold tracking-tight">{APP_NAME}</span>
+						<span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+							powered by <LogoMigma className="size-3" /> Migma
+						</span>
+					</span>
 				</Link>
 				<NavLinks />
-				<div className="mt-auto">
-					<NavFooter />
-				</div>
+				<div className="mt-auto">{footer}</div>
 			</aside>
-			<NavMobile footer={<NavFooter />} />
+			<NavMobile footer={footer} />
 			<main className="min-w-0 flex-1">
 				<div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-10 md:py-10">{children}</div>
 			</main>

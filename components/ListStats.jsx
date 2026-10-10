@@ -36,11 +36,7 @@ export default function ListStats({ current, previous }) {
 			...rate("bounced", current.sent, previous.sent, 2),
 			tone: rateTone(current.bounced, current.sent, LIMITS.bounceRate),
 		},
-		{
-			label: "Complaints",
-			...rate("complained", current.sent, previous.sent, 3),
-			tone: rateTone(current.complained, current.sent, LIMITS.complaintRate),
-		},
+		{ label: "Unsubscribed", ...rate("unsubscribed", reached, previousReached, 2) },
 	];
 
 	return (

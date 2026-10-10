@@ -2,7 +2,7 @@ import ImageFavicon from "@/components/ImageFavicon";
 import { rootDomain } from "@/lib/favicon";
 import { cn } from "@/lib/utils";
 
-// One row per SES domain: whether it can send, its DKIM records and its return path (MAIL FROM), in words.
+// One row per Migma sending domain: whether it can send, its DKIM records and its return path (MAIL FROM), in words.
 export default function ListDomainStatus({ domains }) {
 	return (
 		<ul className="divide-y divide-border/60 overflow-hidden rounded-xl bg-card shadow-border">
@@ -18,14 +18,14 @@ export default function ListDomainStatus({ domains }) {
 							<div className="flex min-w-0 flex-col gap-1">
 								<p className="truncate text-sm font-medium">{domain.domain}</p>
 								<div className="flex flex-wrap gap-x-3 gap-y-1 lg:hidden">
-									{checks.map((check) => (
-										<TextCheck key={check.key} {...check} className="text-xs" />
+									{checks.map(({ key, ...check }) => (
+										<TextCheck key={key} {...check} className="text-xs" />
 									))}
 								</div>
 							</div>
 						</div>
-						{checks.map((check) => (
-							<TextCheck key={check.key} {...check} className="hidden text-sm lg:flex" />
+						{checks.map(({ key, ...check }) => (
+							<TextCheck key={key} {...check} className="hidden text-sm lg:flex" />
 						))}
 					</li>
 				);

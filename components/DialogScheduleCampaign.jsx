@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { CalendarClock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { scheduleCampaign, unscheduleCampaign } from "@/app/(app)/campaigns/actions";
-import InputAudienceLimit, { countRecipients } from "@/components/InputAudienceLimit";
 import PickerSendTime from "@/components/PickerSendTime";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,11 +27,9 @@ const FALLBACK_MINUTES = 9 * 60;
 export default function DialogScheduleCampaign({
 	campaignId,
 	scheduledAt,
-	audienceLimit,
 	audienceCount,
 	history,
 	taken,
-	isCleanupEnabled,
 	blockingMessage,
 	onBeforeSchedule,
 }) {
@@ -41,9 +38,7 @@ export default function DialogScheduleCampaign({
 	const [isOpen, setIsOpen] = useState(false);
 	const [value, setValue] = useState(null);
 	const [suggestions, setSuggestions] = useState([]);
-	const [limit, setLimit] = useState(audienceLimit ? String(audienceLimit) : "");
 	const [isSaving, startSaving] = useTransition();
-	const recipients = countRecipients(limit, audienceCount);
 	const problem = value && (getScheduleProblem(value) ?? blockingMessage);
 
 	// Suggestions depend on the current time, so they're worked out each time the dialog opens.
@@ -60,10 +55,7 @@ export default function DialogScheduleCampaign({
 	function schedule() {
 		startSaving(async () => {
 			if (!(await onBeforeSchedule())) return;
-			const result = await scheduleCampaign(campaignId, {
-				scheduledAt: value.toISOString(),
-				audienceLimit: Number.parseInt(limit, 10) || undefined,
-			});
+			const result = await scheduleCampaign(campaignId, { scheduledAt: value.toISOString() });
 			if (result?.error) return toast.error(result.error);
 			setIsOpen(false);
 			toast.success(`Scheduled for ${formatSendTime(value)}`);
@@ -109,15 +101,14 @@ export default function DialogScheduleCampaign({
 				<DialogHeader>
 					<DialogTitle>{scheduledAt ? "Change the schedule" : "Schedule"}</DialogTitle>
 					<DialogDescription className="tabular-nums">
-						Goes out to {formatCount(recipients, "contact")}. You can keep editing until then.
-						{isCleanupEnabled && " The list cleanup runs when it goes out, so cold contacts get the last-chance email instead."}
+						{audienceCount === null ? "Goes out to your subscribers" : `Goes out to ${formatCount(audienceCount, "subscriber")}`}.
+						{scheduledAt ? " Unschedule it to make changes." : " Migma prepares the email first, which can take a minute."}
 					</DialogDescription>
 				</DialogHeader>
 				{value && (
 					<>
 						<PickerSendTime value={value} onChange={setValue} suggestions={suggestions} history={history} />
 						<SummarySendTime value={value} problem={problem} />
-						<InputAudienceLimit value={limit} onChange={setLimit} audienceCount={audienceCount} />
 					</>
 				)}
 				<DialogFooter className="sm:items-center">
@@ -129,7 +120,7 @@ export default function DialogScheduleCampaign({
 					<DialogClose asChild>
 						<Button variant="outline">Cancel</Button>
 					</DialogClose>
-					<Button onClick={schedule} disabled={isSaving || Boolean(problem) || recipients === 0} className="min-w-24">
+					<Button onClick={schedule} disabled={isSaving || Boolean(problem) || audienceCount === 0} className="min-w-24">
 						{isSaving ? <Loader2 className="animate-spin" /> : "Schedule"}
 					</Button>
 				</DialogFooter>

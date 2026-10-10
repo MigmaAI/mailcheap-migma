@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 
 const newsletterSchema = new mongoose.Schema(
 	{
+		// The Migma account that owns it (models/Account.js). Every query is scoped by it.
+		accountId: { type: String, required: true, index: true },
 		name: { type: String, required: true, trim: true },
 		slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
 		imageUrl: { type: String, trim: true },
@@ -17,25 +19,11 @@ const newsletterSchema = new mongoose.Schema(
 			bio: { type: String, trim: true },
 			imageUrl: { type: String, trim: true },
 		},
-		// New signups get an email with a link and only join once they click it (confirmed opt-in).
-		requireConfirmation: { type: Boolean, default: false },
-		// Checked when an issue is sent (lib/cleanup.js). Empty numbers use the newsletter's defaults.
-		cleanup: {
-			enabled: { type: Boolean, default: false },
-			issues: { type: Number, min: 1 },
-			days: { type: Number, min: 1 },
-		},
-		welcome: {
-			enabled: { type: Boolean, default: false },
-			subject: { type: String, trim: true },
-			previewText: { type: String, trim: true },
-			markdown: { type: String },
-		},
-		// The newsletter's own confirmation email; the built-in one goes out until it has one.
-		confirmation: {
-			subject: { type: String, trim: true },
-			previewText: { type: String, trim: true },
-			markdown: { type: String },
+		// Where the newsletter lives in Migma: the brand (project) whose contacts it uses, and the list (tag)
+		// its subscribers carry. Migma owns the contacts, unsubscribes and bounces.
+		migma: {
+			projectId: { type: String, required: true },
+			tagId: { type: String, required: true },
 		},
 	},
 	{ timestamps: true }

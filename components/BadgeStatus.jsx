@@ -31,6 +31,8 @@ const DOT_TONES = {
 
 const STATUS_TONES = {
 	active: "green",
+	subscribed: "green",
+	review: "amber",
 	sent: "green",
 	delivered: "green",
 	success: "green",

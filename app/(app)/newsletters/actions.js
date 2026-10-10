@@ -4,13 +4,9 @@ import { isValidObjectId } from "mongoose";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { revalidateArchive } from "@/lib/archive-data";
-import { requireSession } from "@/lib/auth";
-import { CLEANUP_LIMITS } from "@/lib/cleanup";
-import { isSendingEnabled } from "@/lib/config";
-import { getConfirmationProblem } from "@/lib/confirmation-content";
-import { connectDb } from "@/lib/db";
+import { requireMigma } from "@/lib/auth";
+import { ensureListTag, listBrands } from "@/lib/migma";
 import { MAX_AUTHOR_BIO_LENGTH, MAX_DESCRIPTION_LENGTH } from "@/lib/newsletters";
-import { sendWelcomeTestEmail } from "@/lib/sending";
 import { parseSocialLinks } from "@/lib/social";
 import Newsletter from "@/models/Newsletter";
 
@@ -20,16 +16,6 @@ const IMAGE_URL_PATTERN = /^(https:\/\/[^\s"'<>]{4,490}|\/[\w\-./]{1,200})$/;
 
 function readText(formData, key) {
 	return String(formData.get(key) ?? "").trim();
-}
-
-// Empty stays unset, so the newsletter's default applies.
-function readNumber(formData, key) {
-	const text = readText(formData, key);
-	return text ? Number(text) : undefined;
-}
-
-function isWithin(value, min, max) {
-	return value === undefined || (Number.isInteger(value) && value >= min && value <= max);
 }
 
 function readNewsletter(formData) {
@@ -45,23 +31,6 @@ function readNewsletter(formData) {
 		description: readText(formData, "description"),
 		author: { bio: readText(formData, "authorBio"), imageUrl: readText(formData, "authorImageUrl") },
 		socialLinks: parseSocialLinks(formData.get("socialLinks")),
-		requireConfirmation: formData.get("requireConfirmation") === "on",
-		cleanup: {
-			enabled: formData.get("cleanupEnabled") === "on",
-			issues: readNumber(formData, "cleanupIssues"),
-			days: readNumber(formData, "cleanupDays"),
-		},
-		welcome: {
-			enabled: formData.get("welcomeEnabled") === "on",
-			subject: readText(formData, "welcomeSubject"),
-			previewText: readText(formData, "welcomePreviewText"),
-			markdown: String(formData.get("welcomeMarkdown") ?? ""),
-		},
-		confirmation: {
-			subject: readText(formData, "confirmationSubject"),
-			previewText: readText(formData, "confirmationPreviewText"),
-			markdown: String(formData.get("confirmationMarkdown") ?? ""),
-		},
 	};
 }
 
@@ -73,6 +42,7 @@ function validateNewsletter(values) {
 	}
 	if (!EMAIL_PATTERN.test(values.fromEmail)) return "From email is invalid";
 	if (values.replyTo && !EMAIL_PATTERN.test(values.replyTo)) return "Reply-to email is invalid";
+	if (!values.postalAddress) return "Add a postal address: anti-spam laws require one in every email";
 	if (values.description.length > MAX_DESCRIPTION_LENGTH) {
 		return `Keep the description under ${MAX_DESCRIPTION_LENGTH} characters`;
 	}
@@ -82,58 +52,42 @@ function validateNewsletter(values) {
 	if (values.author.imageUrl && !IMAGE_URL_PATTERN.test(values.author.imageUrl)) {
 		return "Author photo must be an https:// link or a path like /authors/name.jpg";
 	}
-	if (values.socialLinks.error) return values.socialLinks.error;
-	const { minIssues, maxIssues, minDays, maxDays } = CLEANUP_LIMITS;
-	if (!isWithin(values.cleanup.issues, minIssues, maxIssues)) {
-		return `Ignored issues should be a whole number from ${minIssues} to ${maxIssues}`;
-	}
-	if (!isWithin(values.cleanup.days, minDays, maxDays)) {
-		return `Quiet days should be a whole number from ${minDays} to ${maxDays}`;
-	}
-	if (values.welcome.enabled && (!values.welcome.subject || !values.welcome.markdown.trim())) {
-		return "Welcome email needs a subject and content";
-	}
-	return values.requireConfirmation ? getConfirmationProblem(values.confirmation) : null;
+	return values.socialLinks.error ?? null;
 }
 
-// Sending errors become toasts; a thrown error would replace the page with the error boundary.
-export async function sendWelcomeTest(newsletterId) {
-	await requireSession();
-	if (!isSendingEnabled()) return { error: "Sending is off" };
-	try {
-		await sendWelcomeTestEmail({ newsletterId, to: process.env.ADMIN_EMAIL });
-		return { ok: true };
-	} catch (error) {
-		console.error("[newsletters] Welcome test failed:", error);
-		return { error: error.message || "Sending failed" };
-	}
+// A new newsletter gets its own list (a tag) on the chosen Migma brand. The brand can't change later:
+// the subscribers are contacts on it.
+async function createInMigma(migma, { projectId, name }) {
+	const brands = await listBrands(migma);
+	if (!brands.some(({ id }) => id === projectId)) throw new Error("Pick a brand from your Migma account");
+	const tag = await ensureListTag(migma, { projectId, name });
+	return { projectId, tagId: String(tag.id) };
 }
 
 export async function saveNewsletter(_state, formData) {
-	await requireSession();
+	const { accountId, migma } = await requireMigma();
 	const id = readText(formData, "id");
 	if (id && !isValidObjectId(id)) return { error: "Newsletter not found" };
 
 	const values = readNewsletter(formData);
 	const error = validateNewsletter(values);
 	if (error) return { error };
-	// A collapsed email section sends no fields, and what it had saved stays as it is.
-	const { welcome, confirmation, ...rest } = values;
-	const document = {
-		...rest,
-		socialLinks: values.socialLinks.links,
-		...(formData.has("welcomeSubject") && { welcome }),
-		...(formData.has("confirmationSubject") && { confirmation }),
-	};
+	const document = { ...values, socialLinks: values.socialLinks.links };
 
-	await connectDb();
 	let createdId;
 	try {
-		if (id) await Newsletter.updateOne({ _id: id }, { $set: document }, { runValidators: true });
-		else createdId = (await Newsletter.create(document))._id.toString();
+		if (id) {
+			const { matchedCount } = await Newsletter.updateOne({ _id: id, accountId }, { $set: document }, { runValidators: true });
+			if (!matchedCount) return { error: "Newsletter not found" };
+		} else {
+			if (await Newsletter.exists({ slug: document.slug })) return { error: "This slug is already used" };
+			const migmaRefs = await createInMigma(migma, { projectId: readText(formData, "projectId"), name: values.name });
+			createdId = (await Newsletter.create({ ...document, accountId, migma: migmaRefs }))._id.toString();
+		}
 	} catch (error) {
 		if (error?.code === 11000) return { error: "This slug is already used" };
-		throw error;
+		console.error("[newsletters] Save failed:", error);
+		return { error: error.message || "Couldn't save the newsletter" };
 	}
 
 	revalidatePath("/newsletters");

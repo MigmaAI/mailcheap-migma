@@ -19,7 +19,7 @@ export async function POST(request) {
 
 	await connectDb();
 	await Campaign.updateOne(
-		{ _id: id, archiveSlug: { $type: "string" }, status: { $in: ["sending", "paused", "sent"] } },
+		{ _id: id, archiveSlug: { $type: "string" }, status: { $in: ["sending", "sent"] } },
 		{ $inc: { webViews: 1 } }
 	);
 	return noContent();

@@ -5,18 +5,20 @@ import StateEmpty from "@/components/StateEmpty";
 import TableCampaigns from "@/components/TableCampaigns";
 import { getIssuePageUrl } from "@/lib/archive-data";
 import { recentCampaignsPipeline } from "@/lib/campaign-queries";
-import { connectDb } from "@/lib/db";
+import { requireMigma } from "@/lib/auth";
 import { NEWSLETTER_SUMMARY_FIELDS, toNewsletterMap, toNewsletterOptions } from "@/lib/newsletters";
+import { syncStaleCampaigns } from "@/lib/sending";
 import Campaign from "@/models/Campaign";
 import Newsletter from "@/models/Newsletter";
 
 export const metadata = { title: "Campaigns" };
 
 export default async function CampaignsPage() {
-	await connectDb();
+	const { accountId, migma } = await requireMigma();
+	await syncStaleCampaigns(migma, accountId);
 	const [campaigns, newsletters] = await Promise.all([
-		Campaign.aggregate(recentCampaignsPipeline(200)),
-		Newsletter.find()
+		Campaign.aggregate(recentCampaignsPipeline({ accountId, limit: 200 })),
+		Newsletter.find({ accountId })
 			.sort({ createdAt: 1 })
 			.select(`${NEWSLETTER_SUMMARY_FIELDS} archiveEnabled`)
 			.lean(),

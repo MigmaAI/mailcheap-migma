@@ -1,11 +1,13 @@
 import mongoose from "mongoose";
 
-export const CAMPAIGN_STATUSES = ["draft", "scheduled", "sending", "paused", "sent", "canceled"];
+// review: Migma holds sends from new accounts and large first sends for a quick check before they go out.
+export const CAMPAIGN_STATUSES = ["draft", "scheduled", "review", "sending", "sent", "failed", "canceled"];
 
 const counter = { type: Number, default: 0 };
 
 const campaignSchema = new mongoose.Schema(
 	{
+		accountId: { type: String, required: true, index: true },
 		newsletterId: { type: mongoose.Schema.Types.ObjectId, ref: "Newsletter", required: true },
 		subject: { type: String, trim: true, default: "" },
 		previewText: { type: String, trim: true, default: "" },
@@ -15,8 +17,6 @@ const campaignSchema = new mongoose.Schema(
 		markdown: { type: String, default: "" },
 		html: { type: String, default: "" },
 		status: { type: String, enum: CAMPAIGN_STATUSES, default: "draft" },
-		// Warm-up: send to the most engaged contacts first, capped at audienceLimit.
-		audienceLimit: { type: Number, min: 1 },
 		source: { type: String, default: "dashboard" },
 		scheduledAt: { type: Date },
 		startedAt: { type: Date },
@@ -30,32 +30,35 @@ const campaignSchema = new mongoose.Schema(
 		archivePinned: { type: Boolean, default: false },
 		// Archive page views, once per browser and day.
 		webViews: { type: Number, default: 0 },
+		// The issue as Migma sends it. Migma turns the HTML into its own email (lib/migma-send.js); contentHash
+		// is the content that email was made from, so an unchanged draft isn't prepared twice.
+		migma: {
+			contentHash: { type: String },
+			conversationId: { type: String },
+			emailId: { type: String },
+			html: { type: String },
+			campaignId: { type: String },
+			// The email that campaign sends: a campaign made for an older version isn't reused.
+			campaignEmailId: { type: String },
+			// The Migma generation filling this draft in ("Design with Migma"), until it finishes.
+			designing: { type: String },
+			error: { type: String },
+		},
+		// The latest numbers from Migma's campaign stats, for lists and the overview.
 		stats: {
 			recipients: counter,
-			sent: counter,
 			delivered: counter,
-			bounced: counter,
-			complained: counter,
 			opened: counter,
 			clicked: counter,
-			unsubscribed: counter,
-			failed: counter,
-		},
-		// The list cleanup at this send: last-chance emails sent instead of the issue, and contacts made dormant.
-		lastChance: {
-			recipients: counter,
-			sent: counter,
-			delivered: counter,
 			bounced: counter,
-			complained: counter,
-			failed: counter,
-			dormant: counter,
+			unsubscribed: counter,
+			updatedAt: { type: Date },
 		},
 	},
 	{ timestamps: true }
 );
 
-campaignSchema.index({ newsletterId: 1, createdAt: -1 });
+campaignSchema.index({ accountId: 1, newsletterId: 1, createdAt: -1 });
 campaignSchema.index({ status: 1 });
 campaignSchema.index({ startedAt: -1 });
 campaignSchema.index(

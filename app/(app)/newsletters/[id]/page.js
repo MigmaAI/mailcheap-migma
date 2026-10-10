@@ -1,14 +1,11 @@
-import { Types, isValidObjectId } from "mongoose";
+import { isValidObjectId } from "mongoose";
 import { notFound } from "next/navigation";
 import AvatarNewsletter from "@/components/AvatarNewsletter";
 import FormNewsletter from "@/components/FormNewsletter";
 import HeaderPage from "@/components/HeaderPage";
-import { cleanupTotalsPipeline } from "@/lib/cleanup";
-import { isSendingEnabled } from "@/lib/config";
-import { connectDb } from "@/lib/db";
+import { requireMigma } from "@/lib/auth";
+import { listBrands, listSendingDomains } from "@/lib/migma";
 import { serialize } from "@/lib/serialize";
-import { listSesDomains } from "@/lib/ses";
-import Contact from "@/models/Contact";
 import Newsletter from "@/models/Newsletter";
 
 export const metadata = { title: "Newsletter" };
@@ -18,17 +15,13 @@ export default async function NewsletterPage({ params }) {
 	const isNew = id === "new";
 	if (!isNew && !isValidObjectId(id)) notFound();
 
-	await connectDb();
-	const [newsletter, domains, cleanupTotals] = await Promise.all([
-		isNew ? null : Newsletter.findById(id).lean(),
-		listSesDomains(),
-		isNew ? null : getCleanupTotals(id),
+	const { accountId, migma } = await requireMigma();
+	const [newsletter, brands, sendingDomains] = await Promise.all([
+		isNew ? null : Newsletter.findOne({ _id: id, accountId }).lean(),
+		listBrands(migma).catch(() => null),
+		listSendingDomains(migma).catch(() => null),
 	]);
 	if (!isNew && !newsletter) notFound();
-
-	const verifiedDomains = Array.isArray(domains)
-		? domains.filter(({ verified }) => verified).map(({ domain }) => domain)
-		: null;
 
 	return (
 		<>
@@ -37,18 +30,18 @@ export default async function NewsletterPage({ params }) {
 				backHref="/newsletters"
 				icon={newsletter && <AvatarNewsletter newsletter={newsletter} size={32} />}
 			/>
-			<FormNewsletter
-				newsletter={newsletter ? serialize(newsletter) : null}
-				verifiedDomains={verifiedDomains}
-				isSendingEnabled={isSendingEnabled()}
-				testEmail={process.env.ADMIN_EMAIL}
-				cleanupTotals={cleanupTotals}
-			/>
+			{isNew && brands?.length === 0 ? (
+				<p className="rounded-xl px-4 py-6 text-center text-sm text-muted-foreground shadow-border">
+					Your Migma account has no brand yet. Create one in Migma (it takes your website and picks up your logo and
+					colors), then come back.
+				</p>
+			) : (
+				<FormNewsletter
+					newsletter={newsletter ? serialize(newsletter) : null}
+					brands={brands}
+					sendingDomains={sendingDomains}
+				/>
+			)}
 		</>
 	);
-}
-
-async function getCleanupTotals(newsletterId) {
-	const [totals] = await Contact.aggregate(cleanupTotalsPipeline(new Types.ObjectId(newsletterId)));
-	return { waiting: totals?.waiting ?? 0, kept: totals?.kept ?? 0, dormant: totals?.dormant ?? 0 };
 }

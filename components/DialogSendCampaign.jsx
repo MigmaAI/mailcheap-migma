@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { sendCampaign } from "@/app/(app)/campaigns/actions";
-import InputAudienceLimit, { countRecipients } from "@/components/InputAudienceLimit";
-import ListCleanupPreview from "@/components/ListCleanupPreview";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -19,40 +17,25 @@ import {
 	DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { summarizePreview } from "@/lib/cleanup";
 import { formatCount, formatSendTime } from "@/lib/format";
-import { useCleanupPreview } from "@/lib/use-cleanup-preview";
 
-export default function DialogSendCampaign({
-	campaignId,
-	audienceCount,
-	scheduledAt,
-	isCleanupEnabled,
-	blockingMessage,
-	onBeforeSend,
-}) {
+const STARTED_MESSAGES = {
+	review: "Migma is giving it a quick check before it goes out",
+	sent: "Sent",
+};
+
+export default function DialogSendCampaign({ campaignId, audienceCount, scheduledAt, blockingMessage, onBeforeSend }) {
 	const router = useRouter();
 	const [isOpen, setIsOpen] = useState(false);
-	const [limit, setLimit] = useState("");
 	const [isSending, startSending] = useTransition();
-	const { preview, isCounting, loadPreview } = useCleanupPreview(campaignId);
-	// With the list cleanup on, cold contacts get the last-chance email instead and don't count.
-	const summary = preview?.enabled ? summarizePreview(preview, Number.parseInt(limit, 10)) : null;
-	const issueAudience = preview?.enabled ? preview.issue : audienceCount;
-	const recipients = summary ? summary.issue : countRecipients(limit, audienceCount);
-
-	function changeOpen(nextIsOpen) {
-		if (nextIsOpen && isCleanupEnabled) loadPreview();
-		setIsOpen(nextIsOpen);
-	}
 
 	function send() {
 		startSending(async () => {
 			if (!(await onBeforeSend())) return;
-			const result = await sendCampaign(campaignId, { audienceLimit: Number.parseInt(limit, 10) || undefined });
+			const result = await sendCampaign(campaignId);
 			if (result?.error) return toast.error(result.error);
 			setIsOpen(false);
-			toast.success("Sending started");
+			toast.success(STARTED_MESSAGES[result?.status] ?? "Sending started");
 			router.refresh();
 		});
 	}
@@ -74,7 +57,7 @@ export default function DialogSendCampaign({
 	}
 
 	return (
-		<Dialog open={isOpen} onOpenChange={changeOpen}>
+		<Dialog open={isOpen} onOpenChange={(open) => !isSending && setIsOpen(open)}>
 			<DialogTrigger asChild>
 				<Button>
 					<Send data-icon="inline-start" />
@@ -83,21 +66,26 @@ export default function DialogSendCampaign({
 			</DialogTrigger>
 			<DialogContent className="sm:max-w-sm">
 				<DialogHeader>
-					<DialogTitle className="tabular-nums">Send to {formatCount(recipients, "contact")}?</DialogTitle>
+					<DialogTitle className="tabular-nums">
+						{audienceCount === null ? "Send to your subscribers?" : `Send to ${formatCount(audienceCount, "subscriber")}?`}
+					</DialogTitle>
 					<DialogDescription>
-						{scheduledAt
-							? `It goes out now instead of ${formatSendTime(scheduledAt)}.`
-							: "Most engaged contacts receive it first."}
-						{recipients < issueAudience && " Send it to more later from its page."}
+						{scheduledAt ? `It goes out now instead of ${formatSendTime(scheduledAt)}. ` : ""}
+						Migma prepares the email, then sends it and skips anyone who unsubscribed or bounced.
 					</DialogDescription>
 				</DialogHeader>
-				<InputAudienceLimit value={limit} onChange={setLimit} audienceCount={issueAudience} />
-				{isCleanupEnabled && <ListCleanupPreview summary={summary} isCounting={isCounting} error={preview?.error} />}
+				{isSending && (
+					<p aria-live="polite" className="text-sm text-muted-foreground">
+						Preparing in Migma, this can take a minute…
+					</p>
+				)}
 				<DialogFooter>
 					<DialogClose asChild>
-						<Button variant="outline">Cancel</Button>
+						<Button variant="outline" disabled={isSending}>
+							Cancel
+						</Button>
 					</DialogClose>
-					<Button onClick={send} disabled={isSending || recipients + (summary?.lastChance ?? 0) === 0} className="min-w-20">
+					<Button onClick={send} disabled={isSending || audienceCount === 0} className="min-w-20">
 						{isSending ? <Loader2 className="animate-spin" /> : "Send"}
 					</Button>
 				</DialogFooter>

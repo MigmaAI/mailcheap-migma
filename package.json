@@ -1,5 +1,5 @@
 {
-  "name": "mailcheap",
+  "name": "mailcheap-migma",
   "version": "1.0.0",
   "private": true,
   "license": "MIT",
@@ -9,13 +9,14 @@
   },
   "scripts": {
     "dev": "next dev",
+    "dev:local": "node scripts/dev-local.mjs",
+    "start:local": "next build && node scripts/dev-local.mjs start",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "node --test \"tests/*.test.mjs\""
   },
   "dependencies": {
-    "@aws-sdk/client-sesv2": "^3.1146.0",
     "@floating-ui/dom": "^1.8.0",
     "@tiptap/extension-file-handler": "^3.31.4",
     "@tiptap/extension-image": "^3.31.4",
@@ -24,7 +25,6 @@
     "@tiptap/react": "^3.31.4",
     "@tiptap/starter-kit": "^3.31.4",
     "@tiptap/suggestion": "^3.31.4",
-    "@upstash/qstash": "^2.12.0",
     "@upstash/ratelimit": "^2.2.0",
     "@upstash/redis": "^1.39.0",
     "@vercel/blob": "^2.8.0",
@@ -33,6 +33,7 @@
     "jose": "^6.2.12",
     "lucide-react": "^1.52.0",
     "marked": "^18.0.14",
+    "migma": "^1.9.0",
     "mongoose": "^9.10.4",
     "next": "16.3.8",
     "next-themes": "^0.4.6",
@@ -49,6 +50,7 @@
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
+    "mongodb-memory-server": "^10.4.3",
     "shadcn": "^4.21.1",
     "tailwindcss": "^4"
   }

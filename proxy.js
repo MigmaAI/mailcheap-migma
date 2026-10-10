@@ -2,26 +2,19 @@ import { NextResponse } from "next/server";
 import { getArchiveHostUrl, getArchiveSlugForHost } from "@/lib/archive-hosts";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session-token";
 
-// Reachable without a session: recipients, mail providers, AWS, QStash, and API-key clients.
+// Reachable without a session: readers of the archive and the Migma sign-in. Unsubscribes, opens and
+// clicks go to Migma, not here.
 const PUBLIC_PATHS = [
 	/^\/favicon\.ico$/,
 	/^\/login$/,
-	/^\/unsubscribe$/,
-	/^\/confirm$/,
-	/^\/keep$/,
-	/^\/o\//,
-	/^\/c\//,
+	/^\/auth\/migma(\/callback)?$/,
 	/^\/p\//,
 	/^\/archive\//,
-	/^\/api\/unsubscribe$/,
 	/^\/api\/views$/,
-	/^\/api\/v1\//,
-	/^\/api\/webhooks\//,
-	/^\/api\/jobs\//,
 ];
 
-// A public archive domain never exposes the dashboard, not even its login page.
-const ARCHIVE_HOST_PATHS = [/^\/unsubscribe$/, /^\/api\/unsubscribe$/, /^\/api\/views$/];
+// A public archive domain never exposes the dashboard, not even its sign-in page.
+const ARCHIVE_HOST_PATHS = [/^\/api\/views$/];
 const ISSUE_PATH_PATTERN = /^\/p\/([a-z0-9][a-z0-9-]{0,119})\/?$/;
 const AUTHOR_PATH_PATTERN = /^\/authors\/([a-z0-9][a-z0-9-]{0,59})\/?$/;
 // Generated share images stay on the app domain, where social cards point: they're only PNGs.

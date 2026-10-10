@@ -79,7 +79,7 @@ export default function DialogImportContacts({ newsletters, defaultNewsletterId 
 
 	function runImport() {
 		startImporting(async () => {
-			const totals = { created: 0, existing: 0, invalid: 0 };
+			const totals = { created: 0, existing: 0, invalid: 0, queued: 0 };
 			for (let start = 0; start < rows.length; start += MAX_IMPORT_ROWS_PER_REQUEST) {
 				setProgress(start / rows.length);
 				const result = await importContacts({
@@ -93,10 +93,13 @@ export default function DialogImportContacts({ newsletters, defaultNewsletterId 
 				totals.created += result.created;
 				totals.existing += result.existing;
 				totals.invalid += result.invalid;
+				totals.queued += result.queued ?? 0;
 			}
 			setProgress(1);
 			toast.success(
-				`${formatNumber(totals.created)} added, ${formatNumber(totals.existing)} already there`
+				totals.queued
+					? `Migma is importing ${formatNumber(totals.queued)} contacts. They show up in a minute.`
+					: `${formatNumber(totals.created)} added, ${formatNumber(totals.existing)} already there`
 			);
 			setIsOpen(false);
 			reset();
@@ -123,7 +126,7 @@ export default function DialogImportContacts({ newsletters, defaultNewsletterId 
 				<DialogHeader>
 					<DialogTitle>Import contacts</DialogTitle>
 					<DialogDescription>
-						CSV with an email column. Existing contacts keep their status.
+						CSV with an email column. People who unsubscribed or bounced stay that way in Migma.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -150,7 +153,7 @@ export default function DialogImportContacts({ newsletters, defaultNewsletterId 
 							</SelectTrigger>
 							<SelectContent>
 								<SelectItem value="file">Status from file</SelectItem>
-								<SelectItem value="dormant">Import as dormant</SelectItem>
+								<SelectItem value="dormant">Import as not subscribed</SelectItem>
 							</SelectContent>
 						</Select>
 					</div>
