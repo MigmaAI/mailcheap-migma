@@ -12,15 +12,14 @@ import TabsNewsletter from "@/components/TabsNewsletter";
 import TextEmpty from "@/components/TextEmpty";
 import { Button } from "@/components/ui/button";
 import { requireMigma } from "@/lib/auth";
-import { recentCampaignsPipeline } from "@/lib/campaign-queries";
 import { listNewslettersWithCounts } from "@/lib/contacts";
+import { listRecentCampaigns } from "@/lib/data/campaigns";
 import { formatCompact, formatNumber } from "@/lib/format";
 import { call, listSendingDomains } from "@/lib/migma";
 import { toNewsletterMap, toNewsletterOptions } from "@/lib/newsletters";
 import { getEmailStats } from "@/lib/overview-data";
 import { PERIOD_DAYS } from "@/lib/overview-series";
 import { syncStaleCampaigns } from "@/lib/sending";
-import Campaign from "@/models/Campaign";
 
 // Everything above Domains is about one newsletter, the largest unless ?newsletter= picks one.
 export default async function OverviewPage({ searchParams }) {
@@ -116,7 +115,7 @@ async function StatsEmail({ accountId, newsletterId }) {
 }
 
 async function TableRecentCampaigns({ accountId, newsletterId, newsletters }) {
-	const campaigns = await Campaign.aggregate(recentCampaignsPipeline({ accountId, limit: 5, newsletterId }));
+	const campaigns = await listRecentCampaigns({ accountId, limit: 5, newsletterId: String(newsletterId) });
 	if (campaigns.length === 0) {
 		return (
 			<p className="rounded-xl px-4 py-6 text-center text-sm text-muted-foreground shadow-border animate-fade-in">

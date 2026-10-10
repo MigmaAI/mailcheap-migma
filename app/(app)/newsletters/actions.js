@@ -1,14 +1,14 @@
 "use server";
 
-import { isValidObjectId } from "mongoose";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { revalidateArchive } from "@/lib/archive-data";
 import { requireMigma } from "@/lib/auth";
+import { createNewsletter, isSlugTaken, updateNewsletter } from "@/lib/data/newsletters";
 import { ensureListTag, listBrands } from "@/lib/migma";
 import { MAX_AUTHOR_BIO_LENGTH, MAX_DESCRIPTION_LENGTH } from "@/lib/newsletters";
 import { parseSocialLinks } from "@/lib/social";
-import Newsletter from "@/models/Newsletter";
+import { isObjectIdString } from "@/lib/validation";
 
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -67,7 +67,7 @@ async function createInMigma(migma, { projectId, name }) {
 export async function saveNewsletter(_state, formData) {
 	const { accountId, migma } = await requireMigma();
 	const id = readText(formData, "id");
-	if (id && !isValidObjectId(id)) return { error: "Newsletter not found" };
+	if (id && !isObjectIdString(id)) return { error: "Newsletter not found" };
 
 	const values = readNewsletter(formData);
 	const error = validateNewsletter(values);
@@ -77,15 +77,14 @@ export async function saveNewsletter(_state, formData) {
 	let createdId;
 	try {
 		if (id) {
-			const { matchedCount } = await Newsletter.updateOne({ _id: id, accountId }, { $set: document }, { runValidators: true });
-			if (!matchedCount) return { error: "Newsletter not found" };
+			if (!(await updateNewsletter(accountId, id, document))) return { error: "Newsletter not found" };
 		} else {
-			if (await Newsletter.exists({ slug: document.slug })) return { error: "This slug is already used" };
+			if (await isSlugTaken(document.slug)) return { error: "This slug is already used" };
 			const migmaRefs = await createInMigma(migma, { projectId: readText(formData, "projectId"), name: values.name });
-			createdId = (await Newsletter.create({ ...document, accountId, migma: migmaRefs }))._id.toString();
+			createdId = await createNewsletter({ ...document, accountId, migma: migmaRefs });
 		}
 	} catch (error) {
-		if (error?.code === 11000) return { error: "This slug is already used" };
+		if (/UNIQUE constraint failed/.test(error?.message)) return { error: "This slug is already used" };
 		console.error("[newsletters] Save failed:", error);
 		return { error: error.message || "Couldn't save the newsletter" };
 	}

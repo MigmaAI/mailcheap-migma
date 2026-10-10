@@ -3,7 +3,7 @@ import { getArchiveNewsletter, listArchiveIssues } from "@/lib/archive-data";
 import { getArchiveUrls } from "@/lib/archive-hosts";
 import { getIssueDate } from "@/lib/archive-issues";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 function escapeXml(value) {
 	return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");

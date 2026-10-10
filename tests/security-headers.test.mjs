@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import nextConfig from "../next.config.mjs";
+import config from "../next.config.mjs";
 import { formatActivity } from "../lib/activity.js";
+
+// The config is a function of the build phase (next.config.mjs); production is what's deployed.
+const nextConfig = config("phase-production-build");
 
 async function getHeaders() {
 	const [rule] = await nextConfig.headers();

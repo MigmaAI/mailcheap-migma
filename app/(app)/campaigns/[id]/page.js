@@ -1,27 +1,26 @@
-import { isValidObjectId } from "mongoose";
 import { notFound } from "next/navigation";
 import CampaignReport from "@/components/CampaignReport";
 import FormCampaign from "@/components/FormCampaign";
 import { getArchiveUrls } from "@/lib/archive-hosts";
 import { requireMigma } from "@/lib/auth";
-import { sendTimesPipeline } from "@/lib/campaign-queries";
 import { isSendingEnabled } from "@/lib/config";
+import { getCampaign, listSendTimes } from "@/lib/data/campaigns";
+import { getNewsletter } from "@/lib/data/newsletters";
 import { getListCount, listSendingDomains } from "@/lib/migma";
 import { syncCampaign } from "@/lib/sending";
 import { serialize } from "@/lib/serialize";
-import Campaign from "@/models/Campaign";
-import Newsletter from "@/models/Newsletter";
+import { isObjectIdString } from "@/lib/validation";
 
 export const metadata = { title: "Campaign" };
 
 export default async function CampaignPage({ params }) {
 	const { id } = await params;
-	if (!isValidObjectId(id)) notFound();
+	if (!isObjectIdString(id)) notFound();
 
 	const { account, accountId, migma } = await requireMigma();
-	const stored = await Campaign.findOne({ _id: id, accountId }).lean();
+	const stored = await getCampaign(accountId, id);
 	if (!stored) notFound();
-	const newsletter = await Newsletter.findOne({ _id: stored.newsletterId, accountId }).lean();
+	const newsletter = await getNewsletter(accountId, stored.newsletterId);
 	if (!newsletter) notFound();
 	const campaign = await syncCampaign(migma, stored).catch(() => stored);
 
@@ -61,8 +60,8 @@ function isSendableFrom(fromEmail, domains) {
 // A newsletter's first issue borrows the times the account's other newsletters go out.
 async function getSendTimes(campaign) {
 	const { accountId, newsletterId, _id: excludeId } = campaign;
-	const own = await Campaign.aggregate(sendTimesPipeline({ accountId, newsletterId, excludeId }));
-	const rows = own.length > 0 ? own : await Campaign.aggregate(sendTimesPipeline({ accountId, excludeId }));
+	const own = await listSendTimes({ accountId, newsletterId, excludeId });
+	const rows = own.length > 0 ? own : await listSendTimes({ accountId, excludeId });
 	return {
 		history: rows.map(({ at }) => at.toISOString()),
 		taken: own.filter(({ status }) => status === "scheduled").map(({ at }) => at.toISOString()),

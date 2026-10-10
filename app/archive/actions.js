@@ -2,12 +2,11 @@
 
 import { headers } from "next/headers";
 import { subscribe as addToList } from "@/lib/contacts";
-import { connectDb } from "@/lib/db";
 import { migmaFor } from "@/lib/migma";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
+import { getAccount } from "@/lib/data/accounts";
+import { getArchiveNewsletter } from "@/lib/data/newsletters";
 import { normalizeEmail } from "@/lib/validation";
-import Account from "@/models/Account";
-import Newsletter from "@/models/Newsletter";
 
 const PER_IP = { name: "subscribe-ip", limit: 5, window: "10 m" };
 // Only logged: refusing signups past a shared limit would let one flooder block every real signup.
@@ -26,12 +25,8 @@ export async function subscribe(_state, formData) {
 		return { error: "Too many signups from your network. Try again in a few minutes." };
 	}
 
-	await connectDb();
-	const newsletter = await Newsletter.findOne({
-		slug: String(formData.get("newsletter") ?? ""),
-		archiveEnabled: true,
-	}).lean();
-	const account = newsletter && (await Account.findOne({ accountId: newsletter.accountId }).lean());
+	const newsletter = await getArchiveNewsletter(String(formData.get("newsletter") ?? ""));
+	const account = newsletter && (await getAccount(newsletter.accountId));
 	if (!account) return { error: "This newsletter is not taking signups" };
 
 	if (await isRateLimited({ ...PER_NEWSLETTER, key: newsletter.slug })) {

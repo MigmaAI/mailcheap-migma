@@ -9,11 +9,8 @@ import { getArchiveUrls } from "@/lib/archive-hosts";
 import { getHomeSeo } from "@/lib/archive-seo";
 import { formatNumber } from "@/lib/format";
 
-export const revalidate = 3600;
-
-export function generateStaticParams() {
-	return [];
-}
+// Rendered on each visit from D1: no page cache to keep fresh on Cloudflare.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }) {
 	const newsletter = await getArchiveNewsletter((await params).slug);
@@ -26,7 +23,7 @@ export default async function ArchivePage({ params }) {
 
 	const [issues, readers] = await Promise.all([
 		listArchiveIssues(newsletter._id),
-		countReaders(newsletter._id.toString()),
+		countReaders(newsletter),
 	]);
 	const urls = getArchiveUrls(newsletter);
 	const pinned = issues.filter((issue) => issue.archivePinned);

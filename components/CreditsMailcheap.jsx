@@ -6,19 +6,20 @@ const MARC_URL = "https://x.com/marclou";
 const MAILCHEAP_URL = "https://github.com/marclou/mailcheap";
 const MARC_AVATAR = "https://github.com/marclou.png?size=64";
 
-// Mailcheap is Marc Lou's open-source newsletter app; this version sends through Migma.
+// Mailcheap is Marc Lou's open-source newsletter app; this version sends through Migma. The Migma
+// lockup keeps clear space of half its mark's height on every side (brand book).
 export default function CreditsMailcheap({ className }) {
 	return (
-		<div className={cn("flex flex-col gap-1.5 text-xs text-muted-foreground", className)}>
+		<div className={cn("flex flex-col gap-3 text-xs text-muted-foreground", className)}>
 			<a
 				href={MIGMA_APP_URL}
 				target="_blank"
 				rel="noreferrer"
-				className="inline-flex w-fit items-center gap-1.5 transition-colors duration-150 hover:text-foreground"
+				aria-label="Powered by Migma"
+				className="inline-flex w-fit items-center gap-2 py-1 transition-opacity duration-150 hover:opacity-80"
 			>
-				Powered by
-				<LogoMigma className="size-3.5" />
-				<span className="font-medium text-foreground">Migma</span>
+				<span aria-hidden="true">Powered by</span>
+				<LogoMigma height={14} />
 			</a>
 			<span className="inline-flex flex-wrap items-center gap-1">
 				<a href={MAILCHEAP_URL} target="_blank" rel="noreferrer" className="transition-colors duration-150 hover:text-foreground">

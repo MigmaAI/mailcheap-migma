@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import { Suspense } from "react";
 import Link from "next/link";
-import { isValidObjectId } from "mongoose";
 import { ChevronLeft, ChevronRight, TriangleAlert, Users } from "lucide-react";
 import AvatarContact from "@/components/AvatarContact";
 import BadgeStatus from "@/components/BadgeStatus";
@@ -23,10 +22,11 @@ import {
 } from "@/components/ui/table";
 import { requireMigma } from "@/lib/auth";
 import { CONTACT_STATUSES, CONTACT_STATUS_LABELS, listContacts } from "@/lib/contacts";
+import { listNewsletters } from "@/lib/data/newsletters";
 import { formatDate, formatNumber } from "@/lib/format";
-import { NEWSLETTER_SUMMARY_FIELDS, toNewsletterOptions } from "@/lib/newsletters";
+import { toNewsletterOptions } from "@/lib/newsletters";
 import { cn } from "@/lib/utils";
-import Newsletter from "@/models/Newsletter";
+import { isObjectIdString } from "@/lib/validation";
 
 export const metadata = { title: "Contacts" };
 
@@ -40,9 +40,9 @@ export default async function ContactsPage({ searchParams }) {
 	const page = Math.max(1, Number.parseInt(params.page, 10) || 1);
 
 	const { accountId, migma } = await requireMigma();
-	const newsletters = await Newsletter.find({ accountId }).sort({ createdAt: 1 }).select(`${NEWSLETTER_SUMMARY_FIELDS} migma`).lean();
+	const newsletters = await listNewsletters(accountId);
 	const newsletter =
-		newsletters.find(({ _id }) => isValidObjectId(params.newsletter) && _id.toString() === params.newsletter) ?? newsletters[0];
+		newsletters.find(({ _id }) => isObjectIdString(params.newsletter) && _id === params.newsletter) ?? newsletters[0];
 	const newsletterOptions = toNewsletterOptions(newsletters);
 
 	if (!newsletter) {

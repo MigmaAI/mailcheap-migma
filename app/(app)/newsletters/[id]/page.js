@@ -1,23 +1,23 @@
-import { isValidObjectId } from "mongoose";
 import { notFound } from "next/navigation";
 import AvatarNewsletter from "@/components/AvatarNewsletter";
 import FormNewsletter from "@/components/FormNewsletter";
 import HeaderPage from "@/components/HeaderPage";
 import { requireMigma } from "@/lib/auth";
+import { getNewsletter } from "@/lib/data/newsletters";
 import { listBrands, listSendingDomains } from "@/lib/migma";
 import { serialize } from "@/lib/serialize";
-import Newsletter from "@/models/Newsletter";
+import { isObjectIdString } from "@/lib/validation";
 
 export const metadata = { title: "Newsletter" };
 
 export default async function NewsletterPage({ params }) {
 	const { id } = await params;
 	const isNew = id === "new";
-	if (!isNew && !isValidObjectId(id)) notFound();
+	if (!isNew && !isObjectIdString(id)) notFound();
 
 	const { accountId, migma } = await requireMigma();
 	const [newsletter, brands, sendingDomains] = await Promise.all([
-		isNew ? null : Newsletter.findOne({ _id: id, accountId }).lean(),
+		isNew ? null : getNewsletter(accountId, id),
 		listBrands(migma).catch(() => null),
 		listSendingDomains(migma).catch(() => null),
 	]);

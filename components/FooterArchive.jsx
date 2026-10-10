@@ -27,11 +27,11 @@ export default function FooterArchive({ newsletter, indexHref }) {
 					href={MIGMA_APP_URL}
 					target="_blank"
 					rel="noreferrer"
-					className="inline-flex items-center gap-1.5 transition-colors duration-150 hover:text-foreground"
+					aria-label="Sent with Mailcheap, powered by Migma"
+					className="inline-flex items-center gap-2 py-1 transition-opacity duration-150 hover:opacity-80"
 				>
-					Sent with Mailcheap, powered by
-					<LogoMigma className="size-3.5" />
-					Migma
+					<span aria-hidden="true">Sent with Mailcheap, powered by</span>
+					<LogoMigma height={14} />
 				</a>
 			</div>
 		</footer>

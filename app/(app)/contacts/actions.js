@@ -1,17 +1,16 @@
 "use server";
 
-import { isValidObjectId } from "mongoose";
 import { revalidatePath } from "next/cache";
 import { requireMigma } from "@/lib/auth";
 import { importRows, unsubscribe } from "@/lib/contacts";
 import { MAX_IMPORT_ROWS_PER_REQUEST, sanitizeImportRow } from "@/lib/csv-import";
-import { normalizeEmail } from "@/lib/validation";
-import Newsletter from "@/models/Newsletter";
+import { getNewsletter } from "@/lib/data/newsletters";
+import { isObjectIdString, normalizeEmail } from "@/lib/validation";
 
 async function findNewsletter(newsletterId) {
 	const { accountId, migma } = await requireMigma();
-	if (!isValidObjectId(newsletterId)) return { migma, newsletter: null };
-	return { migma, newsletter: await Newsletter.findOne({ _id: newsletterId, accountId }).lean() };
+	if (!isObjectIdString(newsletterId)) return { migma, newsletter: null };
+	return { migma, newsletter: await getNewsletter(accountId, newsletterId) };
 }
 
 // Rows come from the browser, so each is checked again. Migma keeps existing opt-outs.

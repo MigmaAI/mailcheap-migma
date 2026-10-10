@@ -5,6 +5,10 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Migma brand book (migma.ai/branding): Pink is the signature, on one focal element. Ink on Pink for text. */
+  --color-migma-pink: #f21f62;
+  --color-migma-ink: #231916;
+  --color-migma-cream: #f7f1e8;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;

@@ -1,19 +1,18 @@
 "use server";
 
-import { isValidObjectId } from "mongoose";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { PUBLISHED_STATUSES, revalidateArchive } from "@/lib/archive-data";
 import { requireMigma } from "@/lib/auth";
 import { isSendingEnabled } from "@/lib/config";
+import { setTestEmail } from "@/lib/data/accounts";
+import { createCampaign as insertCampaign, getCampaign, isArchiveSlugTaken, updateCampaign } from "@/lib/data/campaigns";
+import { getNewsletter } from "@/lib/data/newsletters";
 import { getScheduleProblem } from "@/lib/schedule";
 import { checkDesign, scheduleSend, sendNow, sendTestEmail, startDesign, syncCampaign, unschedule } from "@/lib/sending";
 import { ARCHIVE_SLUG_PATTERN } from "@/lib/slug";
 import { firstImageUrl } from "@/lib/thumbnail";
-import { MAX_BODY_BYTES, normalizeEmail } from "@/lib/validation";
-import Account from "@/models/Account";
-import Campaign from "@/models/Campaign";
-import Newsletter from "@/models/Newsletter";
+import { MAX_BODY_BYTES, isObjectIdString, normalizeEmail } from "@/lib/validation";
 
 const MAX_SUBJECT_LENGTH = 200;
 const MAX_PROMPT_LENGTH = 4000;
@@ -22,14 +21,14 @@ const COPY_SUFFIX = " (copy)";
 // Every campaign and newsletter is looked up with the signed-in account's id.
 async function findCampaign(id) {
 	const context = await requireMigma();
-	if (!isValidObjectId(id)) return { ...context, campaign: null };
-	const campaign = await Campaign.findOne({ _id: id, accountId: context.accountId }).lean();
+	if (!isObjectIdString(id)) return { ...context, campaign: null };
+	const campaign = await getCampaign(context.accountId, id);
 	return { ...context, campaign };
 }
 
 async function findNewsletter(accountId, newsletterId) {
-	if (!isValidObjectId(newsletterId)) return null;
-	return Newsletter.findOne({ _id: newsletterId, accountId }).lean();
+	if (!isObjectIdString(newsletterId)) return null;
+	return getNewsletter(accountId, newsletterId);
 }
 
 // Sending errors become toasts; a thrown error would replace the page with the error boundary.
@@ -51,9 +50,9 @@ function revalidateCampaign(id) {
 export async function createCampaign(newsletterId) {
 	const { accountId } = await requireMigma();
 	if (!(await findNewsletter(accountId, newsletterId))) return { error: "Newsletter not found" };
-	const campaign = await Campaign.create({ accountId, newsletterId });
+	const id = await insertCampaign({ accountId, newsletterId });
 	revalidatePath("/campaigns");
-	redirect(`/campaigns/${campaign._id}`);
+	redirect(`/campaigns/${id}`);
 }
 
 // Migma writes and designs the issue on the newsletter's brand; the draft fills in when it's done.
@@ -67,8 +66,7 @@ export async function createDesignedCampaign(newsletterId, prompt) {
 
 	const result = await run(async () => {
 		const designing = await startDesign(migma, { newsletter, prompt: brief });
-		const campaign = await Campaign.create({ accountId, newsletterId, format: "html", source: "migma", migma: { designing } });
-		return { id: String(campaign._id) };
+		return { id: await insertCampaign({ accountId, newsletterId, format: "html", source: "migma", "migma.designing": designing }) };
 	});
 	if (result.error) return result;
 	revalidatePath("/campaigns");
@@ -96,20 +94,17 @@ export async function saveCampaign(id, values) {
 	// The editor opens Markdown drafts as rich text, so their first save moves them to it.
 	const format = campaign.format === "markdown" ? "rich" : campaign.format;
 	const thumbnailUrl = firstImageUrl({ format, html: body });
-	const { matchedCount } = await Campaign.updateOne(
-		{ _id: campaign._id, accountId, status: "draft" },
+	const changed = await updateCampaign(
+		{ id: campaign._id, accountId, status: "draft" },
 		{
-			$set: {
-				subject: String(values?.subject ?? "").slice(0, MAX_SUBJECT_LENGTH),
-				previewText: String(values?.previewText ?? "").slice(0, 300),
-				format,
-				html: body,
-				...(thumbnailUrl && { thumbnailUrl }),
-			},
-			...(!thumbnailUrl && { $unset: { thumbnailUrl: 1 } }),
+			subject: String(values?.subject ?? "").slice(0, MAX_SUBJECT_LENGTH),
+			previewText: String(values?.previewText ?? "").slice(0, 300),
+			format,
+			html: body,
+			thumbnailUrl: thumbnailUrl ?? null,
 		}
 	);
-	if (!matchedCount) return { error: "This campaign is already going out" };
+	if (!changed) return { error: "This campaign is already going out" };
 
 	revalidatePath("/campaigns");
 	return { ok: true };
@@ -124,7 +119,7 @@ export async function sendTestCampaign(id, to) {
 	const newsletter = await findNewsletter(accountId, campaign.newsletterId);
 
 	const result = await run(() => sendTestEmail(migma, { campaign, newsletter, to: email }));
-	if (result.ok && account.testEmail !== email) await Account.updateOne({ accountId }, { $set: { testEmail: email } });
+	if (result.ok && account.testEmail !== email) await setTestEmail(accountId, email);
 	revalidatePath(`/campaigns/${id}`);
 	return result;
 }
@@ -183,7 +178,7 @@ export async function toggleArchivePin(id) {
 	if (!campaign) return { error: "Campaign not found" };
 	if (!campaign.archiveSlug || campaign.archiveListed === false) return { error: "Not listed on the archive" };
 
-	await Campaign.updateOne({ _id: campaign._id, accountId }, { $set: { archivePinned: !campaign.archivePinned } });
+	await updateCampaign({ id: campaign._id, accountId }, { archivePinned: !campaign.archivePinned });
 	revalidatePath(`/campaigns/${id}`);
 	revalidateArchive();
 	return { ok: true };
@@ -193,7 +188,7 @@ export async function duplicateCampaign(id) {
 	const { accountId, campaign } = await findCampaign(id);
 	if (!campaign) return { error: "Campaign not found" };
 
-	const copy = await Campaign.create({
+	const copyId = await insertCampaign({
 		accountId,
 		newsletterId: campaign.newsletterId,
 		subject: campaign.subject ? `${campaign.subject.slice(0, MAX_SUBJECT_LENGTH - COPY_SUFFIX.length)}${COPY_SUFFIX}` : "",
@@ -205,7 +200,7 @@ export async function duplicateCampaign(id) {
 		...(campaign.source === "migma" && { source: "migma" }),
 	});
 	revalidatePath("/campaigns");
-	redirect(`/campaigns/${copy._id}`);
+	redirect(`/campaigns/${copyId}`);
 }
 
 // Discarded campaigns keep everything: canceled hides them from the lists. A scheduled one is
@@ -219,11 +214,8 @@ export async function discardCampaign(id) {
 		if (campaign.status === "scheduled" && !(await unschedule(migma, campaign))) {
 			throw new Error("This campaign is already going out");
 		}
-		const { matchedCount } = await Campaign.updateOne(
-			{ _id: campaign._id, accountId, status: "draft" },
-			{ $set: { status: "canceled" }, $unset: { scheduledAt: 1 } }
-		);
-		if (!matchedCount) throw new Error("This campaign is already going out");
+		const changed = await updateCampaign({ id: campaign._id, accountId, status: "draft" }, { status: "canceled", scheduledAt: null });
+		if (!changed) throw new Error("This campaign is already going out");
 	});
 	revalidateCampaign(id);
 	return result;
@@ -240,17 +232,15 @@ export async function updateArchiveSlug(id, value) {
 	if (!slug && isPublished) return { error: "A sent issue needs a URL" };
 	if (slug && !ARCHIVE_SLUG_PATTERN.test(slug)) return { error: "Use lowercase letters, digits and hyphens" };
 	if (slug === (campaign.archiveSlug ?? "")) return { ok: true, archiveSlug: slug };
-	if (slug && (await Campaign.exists({ _id: { $ne: campaign._id }, archiveSlug: slug }))) {
+	if (slug && (await isArchiveSlugTaken(slug, campaign._id))) {
 		return { error: "Another issue uses this URL" };
 	}
 
 	try {
-		await Campaign.updateOne(
-			{ _id: campaign._id, accountId },
-			slug ? { $set: { archiveSlug: slug } } : { $unset: { archiveSlug: 1 } }
-		);
+		await updateCampaign({ id: campaign._id, accountId }, { archiveSlug: slug || null });
 	} catch (error) {
-		if (error?.code === 11000) return { error: "Another issue uses this URL" };
+		// Two issues taking one URL at once: the unique index refuses the second.
+		if (/UNIQUE constraint failed/.test(error?.message)) return { error: "Another issue uses this URL" };
 		throw error;
 	}
 

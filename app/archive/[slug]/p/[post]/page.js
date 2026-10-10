@@ -17,11 +17,8 @@ import { getIssueDate } from "@/lib/archive-issues";
 import { getIssueSeo } from "@/lib/archive-seo";
 import { cn } from "@/lib/utils";
 
-export const revalidate = 3600;
-
-export function generateStaticParams() {
-	return [];
-}
+// Rendered on each visit from D1: no page cache to keep fresh on Cloudflare.
+export const dynamic = "force-dynamic";
 
 async function getIssuePage(params) {
 	const { slug, post } = await params;
@@ -42,7 +39,7 @@ export default async function IssuePage({ params }) {
 
 	const [more, readers] = await Promise.all([
 		listArchiveIssues(newsletter._id, { limit: 3, excludeId: issue._id }),
-		countReaders(newsletter._id.toString()),
+		countReaders(newsletter),
 	]);
 	const urls = getArchiveUrls(newsletter);
 	const body = renderIssueBody(issue);

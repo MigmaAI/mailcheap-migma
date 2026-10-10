@@ -1,0 +1,27 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "mailcheap",
+	"main": ".open-next/worker.js",
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"services": [
+		// Self-reference the OpenNext adapter uses; the service name must match the worker name.
+		{ "binding": "WORKER_SELF_REFERENCE", "service": "mailcheap" }
+	],
+	"d1_databases": [
+		{
+			// Accounts, newsletter settings, drafts and the archive. Contacts and sends live in Migma.
+			// The first deploy creates the database; `npm run deploy` applies migrations/.
+			"binding": "DB",
+			"database_name": "mailcheap",
+			"migrations_dir": "migrations"
+		}
+	],
+	// SESSION_SECRET (a secret) and APP_URL are set in the dashboard; deploys keep them.
+	"keep_vars": true,
+	"observability": { "enabled": true }
+}
