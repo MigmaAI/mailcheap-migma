@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import AvatarNewsletter from "@/components/AvatarNewsletter";
-import CardCreateBrand from "@/components/CardCreateBrand";
 import FormNewsletter from "@/components/FormNewsletter";
 import HeaderPage from "@/components/HeaderPage";
+import NoticeBrandImport from "@/components/NoticeBrandImport";
 import { requireMigma } from "@/lib/auth";
+import { toSiteHost } from "@/lib/brands";
 import { getNewsletter } from "@/lib/data/newsletters";
 import { listBrands, listSendingDomains } from "@/lib/migma";
 import { serialize } from "@/lib/serialize";
@@ -23,8 +24,7 @@ export default async function NewsletterPage({ params }) {
 		listSendingDomains(migma).catch(() => null),
 	]);
 	if (!isNew && !newsletter) notFound();
-	// A new account starts by creating its brand; a newsletter needs one that Migma has finished reading.
-	const needsBrand = isNew && Array.isArray(brands) && !brands.some(({ importing }) => !importing);
+	const brand = newsletter && brands?.find(({ id: brandId }) => brandId === newsletter.migma.projectId);
 
 	return (
 		<>
@@ -33,15 +33,16 @@ export default async function NewsletterPage({ params }) {
 				backHref="/newsletters"
 				icon={newsletter && <AvatarNewsletter newsletter={newsletter} size={32} />}
 			/>
-			{needsBrand ? (
-				<CardCreateBrand importing={brands.find(({ importing }) => importing)} />
-			) : (
+			<div className="flex flex-col gap-4">
+				{(brand?.importing || brand?.failed) && (
+					<NoticeBrandImport newsletterId={id} site={toSiteHost(brand.domain) ?? brand.name} isFailed={brand.failed} />
+				)}
 				<FormNewsletter
 					newsletter={newsletter ? serialize(newsletter) : null}
 					brands={brands}
 					sendingDomains={sendingDomains}
 				/>
-			)}
+			</div>
 		</>
 	);
 }

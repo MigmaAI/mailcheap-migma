@@ -84,8 +84,8 @@ export default async function OverviewPage({ searchParams }) {
 				) : (
 					<StateEmpty icon={Newspaper} title="Start your newsletter">
 						<p className="max-w-sm text-sm text-muted-foreground">
-							Create a newsletter on one of your Migma brands, import your list, then write an issue or let Migma
-							design one.
+							Name it and add your website, import your list, then write an issue or let Migma design one in your
+							brand.
 						</p>
 						<Button asChild size="sm">
 							<Link href="/newsletters/new">Create a newsletter</Link>
