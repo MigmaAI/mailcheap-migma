@@ -14,14 +14,12 @@ export default function FormLogin({ next, error }) {
 
 	return (
 		<div className="flex flex-col gap-4">
-			{/* The page's one Migma Pink element (brand book): Ink on Pink, the official mark. */}
-			<a
-				href={`/auth/migma?next=${encodeURIComponent(next || "/")}`}
-				className="inline-flex h-11 items-center justify-center gap-2.5 rounded-lg bg-migma-pink px-5 text-sm font-semibold text-migma-ink outline-none transition-opacity duration-150 hover:opacity-90 focus-visible:ring-3 focus-visible:ring-migma-pink/40"
-			>
-				<LogoMigma variant="mark" height={20} surface="light" />
-				Continue with Migma
-			</a>
+			<Button asChild size="lg">
+				<a href={`/auth/migma?next=${encodeURIComponent(next || "/")}`}>
+					<LogoMigma variant="mark" height={18} surface="inverse" />
+					Continue with Migma
+				</a>
+			</Button>
 			<p className="text-center text-xs text-muted-foreground">New to Migma? You create your account on the next step.</p>
 			{message && (
 				<p role="alert" className="text-center text-sm text-destructive">
