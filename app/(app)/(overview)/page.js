@@ -21,6 +21,8 @@ import { getEmailStats } from "@/lib/overview-data";
 import { PERIOD_DAYS } from "@/lib/overview-series";
 import { syncStaleCampaigns } from "@/lib/sending";
 
+const OVERVIEW_DOMAINS = 5;
+
 // Everything above Domains is about one newsletter, the largest unless ?newsletter= picks one.
 export default async function OverviewPage({ searchParams }) {
 	const [{ newsletter: newsletterParam }, { accountId, migma }] = await Promise.all([searchParams, requireMigma()]);
@@ -157,9 +159,16 @@ async function SectionDomains({ migma }) {
 			</NoticeStrip>
 		);
 	}
+	// Verified domains come first; the Domains page has the rest.
+	const shown = domains.slice(0, OVERVIEW_DOMAINS);
 	return (
-		<div className="animate-fade-in">
-			<ListDomainStatus domains={domains} />
+		<div className="flex flex-col gap-2 animate-fade-in">
+			<ListDomainStatus domains={shown} />
+			{domains.length > shown.length && (
+				<Link href="/domains" className="w-fit text-sm text-muted-foreground transition-colors hover:text-foreground">
+					{formatNumber(domains.length - shown.length)} more on Domains
+				</Link>
+			)}
 		</div>
 	);
 }
