@@ -1,4 +1,4 @@
-import { formatCompact, formatNumber, formatRate } from "@/lib/format";
+import { formatCompact, formatCount, formatNumber, formatRate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const MONTH_FORMAT = { month: "short", timeZone: "UTC" };
@@ -35,12 +35,12 @@ export default function CardSending({ usage }) {
 		{
 			label: "Delivered",
 			value: formatRate(monthly.delivered, monthly.sent) ?? "–",
-			detail: `${formatNumber(monthly.delivered)} emails`,
+			detail: formatCount(monthly.delivered, "email"),
 		},
 		{
 			label: "Bounced · complaints",
 			value: formatRate(monthly.bounced, monthly.sent, 2) ?? "–",
-			detail: `${formatNumber(monthly.bounced)} bounced · ${formatNumber(monthly.complained)} complaints`,
+			detail: `${formatNumber(monthly.bounced)} bounced · ${formatCount(monthly.complained, "complaint")}`,
 			tone: bounceShare > 0.05 ? "bad" : bounceShare > 0.02 ? "warn" : null,
 		},
 	];

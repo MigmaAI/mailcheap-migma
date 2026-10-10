@@ -12,7 +12,7 @@ import TableRecipients from "@/components/TableRecipients";
 import { Button } from "@/components/ui/button";
 import { getArchiveUrls } from "@/lib/archive-hosts";
 import { MIGMA_APP_URL } from "@/lib/config";
-import { formatDate, formatNumber, formatRate, formatRelative, formatSendTime } from "@/lib/format";
+import { formatCount, formatDate, formatNumber, formatRate, formatRelative, formatSendTime } from "@/lib/format";
 import { UNSUBSCRIBE_PLACEHOLDER, renderEmail, withResponsiveImages } from "@/lib/render-email";
 
 const STATUS_NOTES = {
@@ -25,19 +25,23 @@ function formatMoney(amount, currency) {
 	return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
 }
 
+function formatPeople(value) {
+	return value === 1 ? "1 person" : `${formatNumber(value)} people`;
+}
+
 // What Migma's numbers leave out and how fresh they are, in one line.
 function describeStats(stats) {
 	if (!stats) return null;
 	const filtered = [
-		stats.botOpens > 0 && `${formatNumber(stats.botOpens)} bot opens`,
-		stats.mppOpens > 0 && `${formatNumber(stats.mppOpens)} Apple Mail privacy opens`,
-		stats.botClicks > 0 && `${formatNumber(stats.botClicks)} link scanner clicks`,
+		stats.botOpens > 0 && formatCount(stats.botOpens, "bot open"),
+		stats.mppOpens > 0 && formatCount(stats.mppOpens, "Apple Mail privacy open"),
+		stats.botClicks > 0 && formatCount(stats.botClicks, "link scanner click"),
 	].filter(Boolean);
 	const updatedAt = stats.reporting?.updatedAt ?? stats.lastUpdated;
 	const freshness =
 		stats.reporting?.status === "cached"
-			? `Saved numbers from ${formatRelative(updatedAt)}${stats.reporting.reason ? ` (${stats.reporting.reason})` : ""}`
-			: updatedAt && `Updated ${formatRelative(updatedAt)}`;
+			? `Saved numbers from ${formatRelative(updatedAt)}${stats.reporting.reason ? ` (${stats.reporting.reason})` : ""}.`
+			: updatedAt && `Updated ${formatRelative(updatedAt)}.`;
 	return [filtered.length > 0 && `Leaves out ${filtered.join(", ")}.`, freshness].filter(Boolean).join(" ");
 }
 
@@ -62,7 +66,7 @@ export default function CampaignReport({ campaign, newsletter, remote, stats, st
 	const timing = [
 		campaign.sentAt && `Sent ${formatSendTime(campaign.sentAt)}`,
 		remote?.completedAt && `finished ${formatRelative(remote.completedAt)}`,
-		remote?.estimatedRecipients && `to ${formatNumber(remote.estimatedRecipients)} subscribers`,
+		remote?.estimatedRecipients && `to ${formatCount(remote.estimatedRecipients, "subscriber")}`,
 	].filter(Boolean);
 	const note = describeStats(stats) ?? (statsError ? `Migma's stats aren't available right now: ${statsError}` : null);
 
@@ -131,12 +135,12 @@ export default function CampaignReport({ campaign, newsletter, remote, stats, st
 						<CardStat
 							label="Opened"
 							value={formatRate(counts.opened, reached)}
-							detail={stats ? `${formatNumber(stats.uniqueOpens)} people · ${formatNumber(stats.totalOpens)} opens` : formatNumber(counts.opened)}
+							detail={stats ? `${formatPeople(stats.uniqueOpens)} · ${formatCount(stats.totalOpens, "open")}` : formatNumber(counts.opened)}
 						/>
 						<CardStat
 							label="Clicked"
 							value={formatRate(counts.clicked, reached)}
-							detail={stats ? `${formatNumber(stats.uniqueClicks)} people · ${formatNumber(stats.totalClicks)} clicks` : formatNumber(counts.clicked)}
+							detail={stats ? `${formatPeople(stats.uniqueClicks)} · ${formatCount(stats.totalClicks, "click")}` : formatNumber(counts.clicked)}
 						/>
 						<CardStat label="Bounced" value={formatRate(counts.bounced, counts.recipients, 2)} detail={formatNumber(counts.bounced)} />
 						<CardStat label="Unsubscribed" value={formatRate(counts.unsubscribed, reached, 2)} detail={formatNumber(counts.unsubscribed)} />
@@ -150,12 +154,12 @@ export default function CampaignReport({ campaign, newsletter, remote, stats, st
 							<span className="text-xs text-muted-foreground">Attributed revenue</span>
 							<span className="text-lg font-semibold tracking-tight tabular-nums">
 								{conversion.revenue === undefined || conversion.revenue === null
-									? `${formatNumber(conversion.conversions)} orders`
+									? formatCount(conversion.conversions, "order")
 									: formatMoney(conversion.revenue, conversion.currency)}
 							</span>
 						</div>
 						<p className="max-w-sm text-xs text-pretty text-muted-foreground">
-							{formatNumber(conversion.conversions)} {conversion.conversions === 1 ? "order" : "orders"} within five days of a
+							{formatCount(conversion.conversions, "order")} within five days of a
 							click on this issue. Credited to it, not proven extra sales.
 						</p>
 					</div>
