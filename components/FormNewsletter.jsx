@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { saveNewsletter } from "@/app/(app)/newsletters/actions";
 import AvatarNewsletter from "@/components/AvatarNewsletter";
+import CardCreateBrand from "@/components/CardCreateBrand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -26,7 +27,16 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains }) {
 	const [fromEmail, setFromEmail] = useState(newsletter?.fromEmail ?? "");
 	const [imageUrl, setImageUrl] = useState(newsletter?.imageUrl ?? "");
 	const [isArchiveEnabled, setIsArchiveEnabled] = useState(Boolean(newsletter?.archiveEnabled));
-	const [projectId, setProjectId] = useState(newsletter?.migma?.projectId ?? brands?.[0]?.id ?? "");
+	const [projectId, setProjectId] = useState(
+		newsletter?.migma?.projectId ?? brands?.find(({ importing }) => !importing)?.id ?? ""
+	);
+	const importingBrand = !newsletter ? brands?.find(({ importing }) => importing) : null;
+	const [isCreatingBrand, setIsCreatingBrand] = useState(Boolean(importingBrand));
+	// Stable, so the brand card's status checks don't restart as this form re-renders.
+	const handleBrandReady = useCallback((id) => {
+		setProjectId(id);
+		setIsCreatingBrand(false);
+	}, []);
 
 	useEffect(() => {
 		if (state?.ok) toast.success("Saved");
@@ -98,13 +108,15 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains }) {
 					) : (
 						<>
 							<input type="hidden" name="projectId" value={projectId} />
-							<Select value={projectId} onValueChange={setProjectId}>
+							{/* Radix reports "" while the value isn't in the list yet (a brand just created, before the
+							page refreshes); nobody can pick "" themselves. */}
+							<Select value={projectId} onValueChange={(value) => value && setProjectId(value)}>
 								<SelectTrigger className="h-10 w-full" aria-label="Brand">
 									<SelectValue placeholder="Pick a brand" />
 								</SelectTrigger>
 								<SelectContent className="max-h-80">
 									{(brands ?? []).map((item) => (
-										<SelectItem key={item.id} value={item.id}>
+										<SelectItem key={item.id} value={item.id} disabled={item.importing}>
 											<BrandOption brand={item} />
 										</SelectItem>
 									))}
@@ -113,6 +125,27 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains }) {
 						</>
 					)}
 				</Field>
+				{!newsletter && (
+					<div className="px-4 py-3 sm:pl-[calc(9rem+2rem)]">
+						{isCreatingBrand ? (
+							<CardCreateBrand
+								importing={importingBrand}
+								onReady={handleBrandReady}
+								onCancel={() => setIsCreatingBrand(false)}
+								isCompact
+							/>
+						) : (
+							<button
+								type="button"
+								onClick={() => setIsCreatingBrand(true)}
+								className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground"
+							>
+								<Plus className="size-3.5" />
+								New brand from a website
+							</button>
+						)}
+					</div>
+				)}
 			</Section>
 
 			<Section title="Sender" stagger={2}>
@@ -243,7 +276,11 @@ function BrandOption({ brand }) {
 				</span>
 			)}
 			<span className="truncate text-sm">{brand.name}</span>
-			{brand.domain && <span className="truncate text-xs text-muted-foreground">{brand.domain}</span>}
+			{brand.importing ? (
+				<span className="shrink-0 text-xs text-muted-foreground">Still importing</span>
+			) : (
+				brand.domain && <span className="truncate text-xs text-muted-foreground">{brand.domain}</span>
+			)}
 		</span>
 	);
 }

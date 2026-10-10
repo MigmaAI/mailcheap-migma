@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { revalidateArchive } from "@/lib/archive-data";
 import { requireMigma } from "@/lib/auth";
 import { createNewsletter, isSlugTaken, updateNewsletter } from "@/lib/data/newsletters";
-import { ensureListTag, listBrands } from "@/lib/migma";
+import { toBrandWebsite } from "@/lib/brands";
+import { MigmaRequestError, ensureListTag, getBrandImport, listBrands, retryBrandImport, startBrandImport } from "@/lib/migma";
 import { MAX_AUTHOR_BIO_LENGTH, MAX_DESCRIPTION_LENGTH } from "@/lib/newsletters";
 import { parseSocialLinks } from "@/lib/social";
 import { isObjectIdString } from "@/lib/validation";
@@ -60,6 +61,7 @@ function validateNewsletter(values) {
 async function createInMigma(migma, { projectId, name }) {
 	const brand = (await listBrands(migma)).find(({ id }) => id === projectId);
 	if (!brand) throw new Error("Pick a brand from your Migma account");
+	if (brand.importing) throw new Error(`Migma is still reading ${brand.domain || brand.name}. Try again in a minute.`);
 	const tag = await ensureListTag(migma, { projectId, name });
 	return { refs: { projectId, tagId: String(tag.id) }, brand };
 }
@@ -95,4 +97,49 @@ export async function saveNewsletter(_state, formData) {
 	revalidateArchive();
 	if (createdId) redirect(`/newsletters/${createdId}`);
 	return { ok: true, savedAt: Date.now() };
+}
+
+// Migma's refusal in its own words (a plan's brand limit, a rate limit), or a plain fallback.
+function describeBrandError(error, fallback) {
+	if (error instanceof MigmaRequestError && error.status === 403) return error.reason || fallback;
+	return error?.message || fallback;
+}
+
+// Creates a brand in the account's Migma workspace from its website. The import runs in Migma;
+// checkBrand reports when it's ready.
+export async function createBrand(_state, formData) {
+	const { migma } = await requireMigma();
+	const website = toBrandWebsite(formData.get("website"));
+	if (!website) return { error: "Enter your website, like acme.com" };
+	try {
+		const host = new URL(website).hostname.replace(/^www\./, "");
+		return { projectId: await startBrandImport(migma, website), website: host };
+	} catch (error) {
+		console.error("[brands] Import failed to start:", error);
+		return { error: describeBrandError(error, "Migma couldn't start reading that website") };
+	}
+}
+
+export async function checkBrand(projectId) {
+	if (!isObjectIdString(projectId)) return { status: "error", error: "Brand not found" };
+	const { migma } = await requireMigma();
+	try {
+		const result = await getBrandImport(migma, projectId);
+		if (result.status === "active") revalidatePath("/newsletters/new");
+		return result;
+	} catch (error) {
+		// A dropped check isn't a failed import: the next check asks again.
+		return { status: "unknown", error: describeBrandError(error, "Migma didn't answer") };
+	}
+}
+
+export async function retryBrand(projectId) {
+	if (!isObjectIdString(projectId)) return { error: "Brand not found" };
+	const { migma } = await requireMigma();
+	try {
+		await retryBrandImport(migma, projectId);
+		return { ok: true };
+	} catch (error) {
+		return { error: describeBrandError(error, "Migma couldn't retry this brand") };
+	}
 }

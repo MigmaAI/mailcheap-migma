@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import AvatarNewsletter from "@/components/AvatarNewsletter";
+import CardCreateBrand from "@/components/CardCreateBrand";
 import FormNewsletter from "@/components/FormNewsletter";
 import HeaderPage from "@/components/HeaderPage";
 import { requireMigma } from "@/lib/auth";
@@ -22,6 +23,8 @@ export default async function NewsletterPage({ params }) {
 		listSendingDomains(migma).catch(() => null),
 	]);
 	if (!isNew && !newsletter) notFound();
+	// A new account starts by creating its brand; a newsletter needs one that Migma has finished reading.
+	const needsBrand = isNew && Array.isArray(brands) && !brands.some(({ importing }) => !importing);
 
 	return (
 		<>
@@ -30,11 +33,8 @@ export default async function NewsletterPage({ params }) {
 				backHref="/newsletters"
 				icon={newsletter && <AvatarNewsletter newsletter={newsletter} size={32} />}
 			/>
-			{isNew && brands?.length === 0 ? (
-				<p className="rounded-xl px-4 py-6 text-center text-sm text-muted-foreground shadow-border">
-					Your Migma account has no brand yet. Create one in Migma (it takes your website and picks up your logo and
-					colors), then come back.
-				</p>
+			{needsBrand ? (
+				<CardCreateBrand importing={brands.find(({ importing }) => importing)} />
 			) : (
 				<FormNewsletter
 					newsletter={newsletter ? serialize(newsletter) : null}
