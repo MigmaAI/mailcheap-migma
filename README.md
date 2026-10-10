@@ -2,7 +2,7 @@
 
 Newsletters without the infrastructure. Write an issue (or let Migma design it on your brand), send it to your list, publish it on the web. Migma handles the sending: domains, deliverability, bounces, complaints, unsubscribes, open and click tracking.
 
-A fork of [Mailcheap](https://github.com/marclou/mailcheap) by [Marc Lou](https://x.com/marclou), MIT licensed. Mailcheap runs on your own Amazon SES, MongoDB, QStash and Redis. This version swaps all of that for one connection, **Continue with Migma**, and runs on Cloudflare Workers with a D1 database.
+A fork of [Mailcheap](https://github.com/marclou/mailcheap) by [Marc Lou](https://x.com/marc_louvion), MIT licensed. Mailcheap runs on your own Amazon SES, MongoDB, QStash and Redis. This version swaps all of that for one connection, **Continue with Migma**, and runs on Cloudflare Workers with a D1 database.
 
 | | Mailcheap | Mailcheap on Migma |
 | --- | --- | --- |
@@ -96,4 +96,4 @@ What Mailcheap does on SES that this version doesn't do yet: confirmed opt-in an
 
 ## License
 
-[MIT](LICENSE). Mailcheap by [Marc Lou](https://x.com/marclou); Migma version by [Migma](https://migma.ai).
+[MIT](LICENSE). Mailcheap by [Marc Lou](https://x.com/marc_louvion); Migma version by [Migma](https://migma.ai).
