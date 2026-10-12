@@ -5,8 +5,9 @@ import HeaderPage from "@/components/HeaderPage";
 import NoticeBrandImport from "@/components/NoticeBrandImport";
 import { requireMigma } from "@/lib/auth";
 import { toSiteHost } from "@/lib/brands";
-import { getNewsletter } from "@/lib/data/newsletters";
+import { getNewsletter, listNewsletters } from "@/lib/data/newsletters";
 import { listBrands, listSendingDomains } from "@/lib/migma";
+import { suggestNewsletter } from "@/lib/newsletter-suggestions";
 import { serialize } from "@/lib/serialize";
 import { isObjectIdString } from "@/lib/validation";
 
@@ -18,13 +19,15 @@ export default async function NewsletterPage({ params }) {
 	if (!isNew && !isObjectIdString(id)) notFound();
 
 	const { accountId, migma } = await requireMigma();
-	const [newsletter, brands, sendingDomains] = await Promise.all([
+	const [newsletter, brands, sendingDomains, newsletters] = await Promise.all([
 		isNew ? null : getNewsletter(accountId, id),
 		listBrands(migma).catch(() => null),
 		listSendingDomains(migma).catch(() => null),
+		isNew ? listNewsletters(accountId) : null,
 	]);
 	if (!isNew && !newsletter) notFound();
 	const brand = newsletter && brands?.find(({ id: brandId }) => brandId === newsletter.migma.projectId);
+	const suggested = isNew ? suggestNewsletter({ newsletters, brands: brands ?? [], sendingDomains: sendingDomains ?? [] }) : null;
 
 	return (
 		<>
@@ -41,6 +44,7 @@ export default async function NewsletterPage({ params }) {
 					newsletter={newsletter ? serialize(newsletter) : null}
 					brands={brands}
 					sendingDomains={sendingDomains}
+					suggested={suggested}
 				/>
 			</div>
 		</>
