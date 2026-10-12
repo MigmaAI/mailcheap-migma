@@ -91,3 +91,25 @@ test("Migma stats map to the campaign's counters, missing ones as zero", () => {
 	);
 	assert.deepEqual(toCampaignStats(null), { recipients: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, unsubscribed: 0 });
 });
+
+test("a preparation is polled until it finishes, and given up on when the wait runs out", async () => {
+	const { waitForPreparation } = await import("../lib/sending-rules.js");
+	let clock = 0;
+	const options = { waitMs: 10_000, intervalMs: 3000, now: () => clock, sleep: async (ms) => (clock += ms) };
+
+	const steps = ["pending", "processing", "completed"];
+	const done = await waitForPreparation(async () => ({ status: steps.shift() }), options);
+	assert.equal(done.status, "completed");
+	assert.equal(clock, 6000);
+
+	clock = 0;
+	const failed = await waitForPreparation(async () => ({ status: "failed", error: "Bad HTML" }), options);
+	assert.equal(failed.error, "Bad HTML");
+
+	clock = 0;
+	let calls = 0;
+	const slow = await waitForPreparation(async () => (calls++, { status: "processing" }), options);
+	assert.equal(slow, null);
+	// Asked at 0s, 3s, 6s and 9s; a check at 12s would be past the 10s wait.
+	assert.equal(calls, 4);
+});

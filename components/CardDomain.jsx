@@ -26,7 +26,7 @@ function subtitle(domain) {
 		return domain.checkedAt ? `Checked ${formatRelative(domain.checkedAt)}` : "Not checked yet";
 	}
 	return [
-		domain.managed ? "Instant domain, up to 50 recipients a day" : domain.region && `Sends from ${domain.region}`,
+		domain.managed ? "Instant domain, up to 50 recipients a day (your own domain lifts this)" : domain.region && `Sends from ${domain.region}`,
 		domain.verifiedAt && !domain.managed && `verified ${formatDate(domain.verifiedAt)}`,
 	]
 		.filter(Boolean)

@@ -1,3 +1,4 @@
+import InfoTip from "@/components/InfoTip";
 import { formatCompact, formatCount, formatNumber, formatRate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,8 @@ export default function CardSending({ usage }) {
 		},
 		{
 			label: "Today",
+			// Two limits people mix up: the plan's, and the one on instant domains.
+			info: "Your Migma plan's daily limit, across all your domains. An instant migma.email domain also sends to at most 50 people a day; add your own domain to use the full limit.",
 			value: formatNumber(today.sent),
 			detail: today.dailyLimit ? `of ${formatCompact(today.dailyLimit)} · ${formatCompact(today.remainingToday)} left` : null,
 			share: today.dailyLimit ? today.sent / today.dailyLimit : null,
@@ -48,9 +51,12 @@ export default function CardSending({ usage }) {
 	return (
 		<div className="overflow-hidden rounded-2xl bg-card shadow-border animate-fade-in">
 			<dl className="grid grid-cols-2 gap-px bg-border/60 lg:grid-cols-4">
-				{items.map(({ label, value, detail, share, tone }) => (
+				{items.map(({ label, info, value, detail, share, tone }) => (
 					<div key={label} className="flex min-w-0 flex-col gap-1 bg-card px-4 py-3.5 sm:px-5">
-						<dt className="text-xs text-muted-foreground">{label}</dt>
+						<dt className="flex items-center gap-1 text-xs text-muted-foreground">
+							{label}
+							{info && <InfoTip label={`About ${label.toLowerCase()}`}>{info}</InfoTip>}
+						</dt>
 						<dd
 							className={cn(
 								"text-lg font-semibold tracking-tight tabular-nums",
