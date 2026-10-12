@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { Loader2 } from "lucide-react";
 import { connectWithKey } from "@/app/login/actions";
+import InfoTip from "@/components/InfoTip";
 import LogoMigma from "@/components/LogoMigma";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,18 +21,22 @@ export default function FormLogin({ next, error }) {
 					Continue with Migma
 				</a>
 			</Button>
-			<p className="text-center text-xs text-muted-foreground">New to Migma? You create your account on the next step.</p>
 			{message && (
 				<p role="alert" className="text-center text-sm text-destructive">
 					{message}
 				</p>
 			)}
 
-			<details className="group mt-2 border-t border-border/60 pt-4">
-				<summary className="cursor-pointer list-none text-center text-xs text-muted-foreground transition-colors select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
-					Use an API key instead
+			<details className="group">
+				<summary className="flex cursor-pointer list-none items-center justify-center gap-1.5 text-xs text-muted-foreground transition-colors select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+					Use an API key
+					{/* What the Migma sign-in grants (lib/migma-oauth.js SCOPES), in plain words. */}
+					<InfoTip label="What Mailcheap can access" side="bottom">
+						New to Migma? You sign up on the next step. Mailcheap can add contacts and lists, create, design and
+						send emails, and set up sending domains and brands. Disconnect any time from your Migma API keys.
+					</InfoTip>
 				</summary>
-				<form action={action} className="mt-3 flex flex-col gap-3">
+				<form action={action} className="mt-3 flex gap-2">
 					<input type="hidden" name="next" value={next || "/"} />
 					<Input
 						name="apiKey"
@@ -41,19 +46,20 @@ export default function FormLogin({ next, error }) {
 						spellCheck={false}
 						required
 						aria-label="Migma API key"
-						className="h-10 font-mono"
+						className="h-9 font-mono"
 					/>
-					<p className="text-xs text-muted-foreground">
-						Create one in{" "}
-						<a href={MIGMA_API_KEYS_URL} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
-							Migma settings
-						</a>{" "}
-						with audience, email, campaign and domain access.
-					</p>
-					<Button type="submit" variant="outline" disabled={isPending}>
+					<Button type="submit" variant="outline" disabled={isPending} className="min-w-20">
 						{isPending ? <Loader2 className="animate-spin" /> : "Connect"}
 					</Button>
 				</form>
+				<a
+					href={MIGMA_API_KEYS_URL}
+					target="_blank"
+					rel="noreferrer"
+					className="mt-2 block text-center text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+				>
+					Get a key in Migma
+				</a>
 			</details>
 		</div>
 	);

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import CreditsMailcheap from "@/components/CreditsMailcheap";
 import FormLogin from "@/components/FormLogin";
-import LogoMailcheap from "@/components/LogoMailcheap";
+import IllustrationConnect from "@/components/IllustrationConnect";
 import { getAccount } from "@/lib/auth";
 import { APP_NAME } from "@/lib/config";
 
@@ -13,18 +13,16 @@ export default async function LoginPage({ searchParams }) {
 	const { next, error } = await searchParams;
 
 	return (
-		<main className="flex min-h-dvh items-center justify-center px-4">
-			<div className="w-full max-w-xs">
-				<div className="mb-8 flex flex-col items-center gap-3 text-center">
-					<LogoMailcheap className="size-10" />
-					<h1 className="text-lg font-semibold tracking-tight">{APP_NAME}</h1>
-					<p className="text-sm text-balance text-muted-foreground">
-						Write, send and publish your newsletter. Migma handles the sending.
-					</p>
+		<main className="flex min-h-dvh flex-col items-center px-4">
+			<section className="flex w-full max-w-xs flex-1 flex-col justify-center gap-8 py-16 animate-enter">
+				<IllustrationConnect />
+				<div className="flex flex-col gap-1.5 text-center">
+					<h1 className="text-xl font-semibold tracking-tight">Connect Migma</h1>
+					<p className="text-sm text-balance text-muted-foreground">{APP_NAME} for writing. Migma for sending.</p>
 				</div>
 				<FormLogin next={typeof next === "string" ? next : "/"} error={typeof error === "string" ? error.slice(0, 200) : null} />
-				<CreditsMailcheap className="mt-10 items-center" />
-			</div>
+			</section>
+			<CreditsMailcheap className="items-center pb-8" />
 		</main>
 	);
 }
