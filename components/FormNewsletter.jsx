@@ -75,7 +75,8 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains, sug
 			markdown: sampleIssue({ ...previewValues, title }),
 			subject,
 			previewText: previewValues.description.trim(),
-			newsletter: { name: title, postalAddress: previewValues.postalAddress.trim() },
+			// An empty address still shows where it goes.
+			newsletter: { name: title, postalAddress: previewValues.postalAddress.trim() || "Your postal address" },
 		});
 		return { subject, html: html.replaceAll(UNSUBSCRIBE_PLACEHOLDER, "#") };
 	}, [previewValues]);
@@ -306,7 +307,13 @@ export default function FormNewsletter({ newsletter, brands, sendingDomains, sug
 
 			<aside aria-label="Preview" className="min-w-0 xl:sticky xl:top-6">
 				<PreviewEmail
-					sender={{ name, fromName, fromEmail: fromEmail || "hi@yourdomain.com", imageUrl: previewImageUrl }}
+					// Empty fields show what goes there, not a blank sender.
+					sender={{
+						name: name.trim() || "Your newsletter",
+						fromName: fromName.trim() || name.trim() || "Your name",
+						fromEmail: fromEmail.trim() || "you@yourdomain.com",
+						imageUrl: previewImageUrl,
+					}}
 					subject={preview.subject}
 					previewText={description.trim()}
 					html={preview.html}
