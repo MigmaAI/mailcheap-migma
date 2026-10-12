@@ -31,16 +31,24 @@ export default function DialogSendCampaign({ campaignId, audienceCount, schedule
 
 	function send() {
 		startSending(async () => {
-			if (!(await onBeforeSend())) return;
-			const result = await sendCampaign(campaignId);
-			if (result?.error) return toast.error(result.error);
-			setIsOpen(false);
-			toast.success(STARTED_MESSAGES[result?.status] ?? "Sending started");
-			router.refresh();
+			try {
+				if (!(await onBeforeSend())) return;
+				const result = await sendCampaign(campaignId);
+				if (result?.error) return toast.error(result.error);
+				setIsOpen(false);
+				toast.success(STARTED_MESSAGES[result?.status] ?? "Sending started");
+				router.refresh();
+			} catch {
+				// A dropped connection rejects the action; the campaign page shows whether it went out.
+				toast.error("Couldn't reach Mailcheap. Refresh to see whether it went out.");
+			}
 		});
 	}
 
-	if (blockingMessage) {
+	// Nobody to send to yet: the button explains instead of opening "Send to 0 subscribers?".
+	const disabledMessage = blockingMessage ?? (audienceCount === 0 ? "No subscribers yet. Add contacts first." : null);
+
+	if (disabledMessage) {
 		return (
 			<Tooltip>
 				<TooltipTrigger asChild>
@@ -51,7 +59,7 @@ export default function DialogSendCampaign({ campaignId, audienceCount, schedule
 						</Button>
 					</span>
 				</TooltipTrigger>
-				<TooltipContent>{blockingMessage}</TooltipContent>
+				<TooltipContent>{disabledMessage}</TooltipContent>
 			</Tooltip>
 		);
 	}
@@ -85,7 +93,7 @@ export default function DialogSendCampaign({ campaignId, audienceCount, schedule
 							Cancel
 						</Button>
 					</DialogClose>
-					<Button onClick={send} disabled={isSending || audienceCount === 0} className="min-w-20">
+					<Button onClick={send} disabled={isSending} className="min-w-20">
 						{isSending ? <Loader2 className="animate-spin" /> : "Send"}
 					</Button>
 				</DialogFooter>

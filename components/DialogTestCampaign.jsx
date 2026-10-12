@@ -25,16 +25,27 @@ export default function DialogTestCampaign({ campaignId, testEmail, disabledReas
 	const [isOpen, setIsOpen] = useState(false);
 	const [to, setTo] = useState(testEmail ?? "");
 	const [isTesting, startTesting] = useTransition();
+	// Migma prepares the first test of each version, which can take a minute: say so instead of only spinning.
+	const [isPreparing, setIsPreparing] = useState(false);
 
 	function sendTest(event) {
 		event.preventDefault();
 		startTesting(async () => {
-			if (!(await onBeforeTest())) return;
-			const result = await sendTestCampaign(campaignId, to);
-			if (result?.error) return toast.error(result.error);
-			setIsOpen(false);
-			toast.success(`Test sent to ${to.trim()}`);
-			router.refresh();
+			const preparingTimer = setTimeout(() => setIsPreparing(true), 3000);
+			try {
+				if (!(await onBeforeTest())) return;
+				const result = await sendTestCampaign(campaignId, to);
+				if (result?.error) return toast.error(result.error);
+				setIsOpen(false);
+				toast.success(`Test sent to ${to.trim()}`);
+				router.refresh();
+			} catch {
+				// A dropped connection rejects the action; without this the button would spin forever.
+				toast.error("Couldn't reach Mailcheap. Check your connection and try again.");
+			} finally {
+				clearTimeout(preparingTimer);
+				setIsPreparing(false);
+			}
 		});
 	}
 
@@ -67,7 +78,7 @@ export default function DialogTestCampaign({ campaignId, testEmail, disabledReas
 					<DialogHeader>
 						<DialogTitle>Send a test</DialogTitle>
 						<DialogDescription>
-							The email exactly as Migma will send it. The first test of each version takes up to a minute to prepare.
+							The email exactly as Migma will send it.
 						</DialogDescription>
 					</DialogHeader>
 					<Input
@@ -80,6 +91,11 @@ export default function DialogTestCampaign({ campaignId, testEmail, disabledReas
 						autoFocus
 						aria-label="Send the test to"
 					/>
+					{isPreparing && (
+						<p aria-live="polite" className="-mt-1 text-xs text-muted-foreground">
+							Migma is preparing this version of the email. It can take a minute.
+						</p>
+					)}
 					<DialogFooter>
 						<DialogClose asChild>
 							<Button type="button" variant="outline" disabled={isTesting}>
